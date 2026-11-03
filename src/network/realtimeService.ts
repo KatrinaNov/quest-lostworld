@@ -20,6 +20,9 @@ import {
   type RoomSession,
 } from './types';
 
+/** Через сколько после остановки один раз повторяем финальную позицию. */
+const SETTLE_RESEND_MS = 350;
+
 export interface ConnectOptions {
   mode: RoomMode;
   /** Стартовая точка для игрока, занявшего слот с номером slot (0..maxPlayers-1). */
@@ -89,7 +92,7 @@ export class RealtimeRoom extends Emitter<RoomEvents> implements RoomSession {
   private lastSent: Point = { x: Number.NaN, y: Number.NaN };
   private lastSentAt = 0;
   private flushTimer: ReturnType<typeof setTimeout> | null = null;
-  private keepAliveTimer: ReturnType<typeof setInterval> | null = null;
+  private settleTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly minIntervalMs = 1000 / APP_CONFIG.positionSendHz;
 
   constructor(
@@ -440,6 +443,7 @@ export class RealtimeRoom extends Emitter<RoomEvents> implements RoomSession {
     }
 
     const next = new Map<string, Player>();
+    let newcomer = false;
     for (const entry of visible) {
       if (entry.id === this.self.id) {
         next.set(entry.id, this.self);
@@ -452,6 +456,7 @@ export class RealtimeRoom extends Emitter<RoomEvents> implements RoomSession {
         prev.connected = true;
         next.set(entry.id, prev);
       } else {
+        newcomer = true;
         next.set(entry.id, {
           id: entry.id,
           name: entry.name,
@@ -472,6 +477,10 @@ export class RealtimeRoom extends Emitter<RoomEvents> implements RoomSession {
       this.signature = signature;
       this.emit('players', this.getPlayers());
     }
+
+    // Появился новый игрок: один раз сообщаем ему свою актуальную позицию
+    // (в Presence записана только позиция на момент входа). Это заменяет периодическую рассылку.
+    if (newcomer) this.flushPosition(true);
   }
 
   private kick(reason: RoomLeaveReason): void {
@@ -493,7 +502,12 @@ export class RealtimeRoom extends Emitter<RoomEvents> implements RoomSession {
     this.emit('position', { id: msg.id, x: msg.x, y: msg.y });
   }
 
-  private flushPosition(): void {
+  /**
+   * Отправляет текущую позицию. После последней отправки запускается одна «страховочная»
+   * повторная отправка (на случай потери пакета): она нужна только после остановки игрока
+   * и не повторяется, пока он стоит.
+   */
+  private flushPosition(isSettle = false): void {
     if (this.status !== 'connected' || !this.channel) return;
     const x = Math.round(this.self.x);
     const y = Math.round(this.self.y);
@@ -501,6 +515,15 @@ export class RealtimeRoom extends Emitter<RoomEvents> implements RoomSession {
     this.lastSentAt = performance.now();
     const message: PositionMessage = { id: this.self.id, x, y, t: Date.now() };
     void this.channel.send({ type: 'broadcast', event: 'pos', payload: message });
+
+    if (isSettle) return;
+    if (this.settleTimer !== null) clearTimeout(this.settleTimer);
+    this.settleTimer = setTimeout(() => {
+      this.settleTimer = null;
+      if (Math.round(this.self.x) === this.lastSent.x && Math.round(this.self.y) === this.lastSent.y) {
+        this.flushPosition(true);
+      }
+    }, SETTLE_RESEND_MS);
   }
 
   // ---------------------------------------------------------------- вспомогательное
@@ -540,17 +563,14 @@ export class RealtimeRoom extends Emitter<RoomEvents> implements RoomSession {
   private startBackgroundWork(): void {
     window.addEventListener('online', this.onOnline);
     document.addEventListener('visibilitychange', this.onVisibility);
-    this.keepAliveTimer = setInterval(() => {
-      if (this.status === 'connected') this.flushPosition();
-    }, APP_CONFIG.positionKeepAliveMs);
   }
 
   private stopBackgroundWork(): void {
     window.removeEventListener('online', this.onOnline);
     document.removeEventListener('visibilitychange', this.onVisibility);
-    if (this.keepAliveTimer !== null) clearInterval(this.keepAliveTimer);
+    if (this.settleTimer !== null) clearTimeout(this.settleTimer);
     if (this.flushTimer !== null) clearTimeout(this.flushTimer);
-    this.keepAliveTimer = null;
+    this.settleTimer = null;
     this.flushTimer = null;
   }
 }

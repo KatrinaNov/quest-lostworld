@@ -4,6 +4,7 @@ import { createGame, type GameHandle } from './game/createGame';
 import { WORLD_CONFIG } from './game/config/worldConfig';
 import { createRoom, joinRoom } from './network/roomService';
 import type { Point, RoomSession } from './network/types';
+import { enterFullscreen, isMobileDevice, isStandalone } from './ui/Fullscreen';
 import { Hud } from './ui/Hud';
 import { Lobby } from './ui/Lobby';
 import { MobileControls } from './ui/MobileControls';
@@ -20,6 +21,14 @@ function spawnForSlot(slot: number): Point {
   const points = WORLD_CONFIG.spawnPoints;
   const p = points[slot % points.length];
   return { x: p.x, y: p.y };
+}
+
+/**
+ * На телефонах переходим в полноэкранный режим по нажатию «Создать» / «Подключиться»:
+ * браузер разрешает это только из обработчика касания, поэтому вызываем до сетевых запросов.
+ */
+function requestMobileFullscreen(): void {
+  if (isMobileDevice() && !isStandalone()) void enterFullscreen();
 }
 
 /**
@@ -45,11 +54,13 @@ class App {
   constructor() {
     this.lobby = new Lobby(this.uiRoot, {
       onCreate: async (name) => {
+        requestMobileFullscreen();
         const room = await createRoom(name, spawnForSlot);
         this.enterGame(room);
         this.notifications.show(`Комната создана. Код: ${room.roomCode}`, 'success', 5000);
       },
       onJoin: async (name, code) => {
+        requestMobileFullscreen();
         const room = await joinRoom(name, code, spawnForSlot);
         this.enterGame(room);
         this.notifications.show(`Вы в комнате ${room.roomCode}`, 'success');

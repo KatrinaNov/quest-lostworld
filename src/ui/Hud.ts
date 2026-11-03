@@ -1,4 +1,5 @@
 import type { ConnectionStatus, GameBridge, Player } from '../network/types';
+import { isFullscreenSupported, isMobileDevice, isStandalone, toggleFullscreen } from './Fullscreen';
 import type { Notifications } from './Notifications';
 
 const LEAVE_CONFIRM_MS = 3000;
@@ -56,6 +57,12 @@ export class Hud {
         <ul class="hud-players"></ul>
       </div>
       <div class="hud-right">
+        <button type="button" class="hud-fs" aria-label="Во весь экран" title="Во весь экран" hidden>
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+            <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" fill="none" stroke="currentColor"
+              stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </button>
         <button type="button" class="hud-leave">Выйти</button>
       </div>
     `;
@@ -66,6 +73,13 @@ export class Hud {
     this.leaveBtn = this.root.querySelector<HTMLButtonElement>('.hud-leave') as HTMLButtonElement;
     const codeBtn = this.root.querySelector<HTMLButtonElement>('.hud-code') as HTMLButtonElement;
     (this.root.querySelector('.hud-code-value') as HTMLElement).textContent = room.roomCode;
+
+    // Кнопка «во весь экран» нужна, только если браузер умеет и это ещё не приложение.
+    const fsBtn = this.root.querySelector<HTMLButtonElement>('.hud-fs') as HTMLButtonElement;
+    if (isFullscreenSupported() && !isStandalone() && isMobileDevice()) {
+      fsBtn.hidden = false;
+      fsBtn.addEventListener('click', () => void toggleFullscreen());
+    }
 
     codeBtn.addEventListener('click', () => void this.copyInvite());
     this.leaveBtn.addEventListener('click', () => this.handleLeaveClick());

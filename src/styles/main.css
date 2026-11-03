@@ -34,6 +34,8 @@
 html,
 body {
   margin: 0;
+  padding: 0;
+  width: 100%;
   height: 100%;
   overflow: hidden;
   overscroll-behavior: none;
@@ -41,9 +43,18 @@ body {
   color: var(--text);
   font-family: var(--font-body);
   -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
   -webkit-touch-callout: none;
   -webkit-user-select: none;
   user-select: none;
+  /* без двойного тапа-зума; прокрутка и щипок внутри игры отключены ниже */
+  touch-action: manipulation;
+}
+
+/* Страница никогда не прокручивается: резинка iOS и «подтягивание» адресной строки не нужны. */
+body {
+  position: fixed;
+  inset: 0;
 }
 
 input {
@@ -51,9 +62,18 @@ input {
   user-select: text;
 }
 
+/*
+ * Игровая область занимает всю доступную площадь.
+ * Порядок важен: сначала запасной вариант 100%, затем динамическая высота 100dvh,
+ * которая учитывает появление/скрытие адресной строки мобильного браузера.
+ */
 #app {
   position: fixed;
-  inset: 0;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  height: 100dvh;
   overflow: hidden;
 }
 
@@ -367,6 +387,18 @@ input {
   color: var(--muted);
 }
 
+.lobby-hint {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 13px;
+  text-align: center;
+  color: var(--muted);
+}
+
+.lobby-hint[hidden] {
+  display: none;
+}
+
 .lobby-status--error {
   color: var(--danger);
 }
@@ -443,6 +475,30 @@ input {
   flex-direction: column;
   align-items: flex-start;
   gap: 6px;
+}
+
+.hud-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.hud-fs {
+  display: inline-grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.hud-fs[hidden] {
+  display: none;
 }
 
 .hud-code,

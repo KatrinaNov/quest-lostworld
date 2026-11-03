@@ -48,18 +48,42 @@ export function createGame(parent: HTMLElement, bridge: GameBridge, virtualInput
     },
   });
 
-  const resize = (): void => {
+  // Размер холста всегда равен размеру контейнера. Меняется он при повороте, появлении/скрытии
+  // адресной строки и входе в полноэкранный режим. Сцена и сеть при этом не затрагиваются:
+  // обновляется только размер холста и масштаб камеры (см. WorldScene.applyZoom).
+  let frame = 0;
+  let destroyed = false;
+  const applySize = (): void => {
+    frame = 0;
+    if (destroyed) return;
     const { w, h } = size();
     if (game.scale.width !== w || game.scale.height !== h) game.scale.resize(w, h);
   };
+  const resize = (): void => {
+    if (frame === 0) frame = requestAnimationFrame(applySize);
+  };
+  // После поворота экрана браузеры иногда сообщают итоговый размер с задержкой.
+  const resizeSoonAfterRotation = (): void => {
+    resize();
+    window.setTimeout(resize, 350);
+  };
+
   const observer = new ResizeObserver(resize);
   observer.observe(parent);
-  window.addEventListener('orientationchange', resize);
+  window.addEventListener('resize', resize);
+  window.addEventListener('orientationchange', resizeSoonAfterRotation);
+  window.visualViewport?.addEventListener('resize', resize);
+  document.addEventListener('fullscreenchange', resize);
 
   return {
     destroy: () => {
+      destroyed = true;
+      if (frame !== 0) cancelAnimationFrame(frame);
       observer.disconnect();
-      window.removeEventListener('orientationchange', resize);
+      window.removeEventListener('resize', resize);
+      window.removeEventListener('orientationchange', resizeSoonAfterRotation);
+      window.visualViewport?.removeEventListener('resize', resize);
+      document.removeEventListener('fullscreenchange', resize);
       game.destroy(true);
     },
   };

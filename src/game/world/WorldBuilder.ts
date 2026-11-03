@@ -48,14 +48,18 @@ export function buildWorld(scene: Phaser.Scene): BuiltWorld {
   const obstacles: Obstacle[] = [];
 
   addGrass(scene);
-  const ground = scene.add.graphics().setDepth(DEPTH.ground);
-  const detail = scene.add.graphics().setDepth(DEPTH.groundDetail);
+  // Земля состоит из тысяч фигур (булыжники, цветы...). Phaser Graphics пересчитывает их КАЖДЫЙ кадр,
+  // что сильно роняет FPS на телефонах. Поэтому рисуем один раз и «запекаем» в текстуру.
+  const ground = scene.add.graphics();
+  const detail = scene.add.graphics();
+  const shade = scene.add.graphics();
 
   for (const path of WORLD_CONFIG.paths) drawPathBed(ground, path);
   for (const path of WORLD_CONFIG.paths) drawPathCobbles(ground, path, rng);
   drawPlaza(ground, detail, rng);
   drawGroundDetails(detail, rng);
-  drawForestShade(scene);
+  drawForestShade(shade);
+  bakeGround(scene, [ground, detail, shade]);
 
   addRuins(scene, rng, obstacles);
   addRuneStones(scene, obstacles);
@@ -73,6 +77,28 @@ function addGrass(scene: Phaser.Scene): void {
     .tileSprite(0, 0, WORLD_CONFIG.width, WORLD_CONFIG.height, TEXTURES.grass)
     .setOrigin(0, 0)
     .setDepth(DEPTH.grass);
+}
+
+/**
+ * Рисует слои земли в одну текстуру (RenderTexture) и уничтожает исходные Graphics.
+ * Масштаб запекания > 1 сохраняет чёткость при приближении камеры на телефонах.
+ */
+function bakeGround(scene: Phaser.Scene, layers: Phaser.GameObjects.Graphics[]): void {
+  const { width, height, bakeScale } = WORLD_CONFIG;
+  const maxSide = 4096; // безопасный предел размера текстуры на мобильных GPU
+  const scale = Math.min(bakeScale, maxSide / width, maxSide / height);
+
+  const texture = scene.add
+    .renderTexture(0, 0, Math.ceil(width * scale), Math.ceil(height * scale))
+    .setOrigin(0, 0)
+    .setScale(1 / scale)
+    .setDepth(DEPTH.ground);
+
+  for (const layer of layers) {
+    layer.setScale(scale);
+    texture.draw(layer);
+    layer.destroy();
+  }
 }
 
 function samplePath(path: PathLine, step: number): Array<{ x: number; y: number; nx: number; ny: number }> {
@@ -215,8 +241,7 @@ function drawGroundDetails(g: Phaser.GameObjects.Graphics, rng: Rng): void {
 }
 
 /** Затемнение к краям мира — лес сгущается. */
-function drawForestShade(scene: Phaser.Scene): void {
-  const g = scene.add.graphics().setDepth(DEPTH.groundDetail + 1);
+function drawForestShade(g: Phaser.GameObjects.Graphics): void {
   const { width, height } = WORLD_CONFIG;
   const bands = 8;
   const thickness = 18;

@@ -1,5 +1,6 @@
 import { APP_CONFIG } from '../config/appConfig';
 import { GameError } from '../network/types';
+import { isIos, isStandalone } from './Fullscreen';
 import { normalizeRoomCode } from '../network/roomService';
 
 export interface LobbyHandlers {
@@ -58,6 +59,9 @@ export class Lobby {
           <button id="lobby-join" class="btn btn--secondary" type="button">Подключиться</button>
         </div>
         <p id="lobby-status" class="lobby-status" role="status" aria-live="polite"></p>
+        <p id="lobby-hint" class="lobby-hint" hidden>
+          Чтобы убрать адресную строку на iPhone: «Поделиться» → «На экран “Домой”», затем запускайте игру с иконки.
+        </p>
       </div>
     `;
     root.appendChild(this.screen);
@@ -67,6 +71,9 @@ export class Lobby {
     this.createBtn = requireElement<HTMLButtonElement>(this.screen, '#lobby-create');
     this.joinBtn = requireElement<HTMLButtonElement>(this.screen, '#lobby-join');
     this.status = requireElement<HTMLElement>(this.screen, '#lobby-status');
+
+    // На iPhone полноэкранный режим для сайта недоступен — подсказываем установку на экран «Домой».
+    if (isIos() && !isStandalone()) requireElement(this.screen, '#lobby-hint').hidden = false;
 
     this.nameInput.value = this.loadName();
     const invited = new URLSearchParams(window.location.search).get('room');

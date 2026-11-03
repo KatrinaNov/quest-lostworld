@@ -1,14 +1,24 @@
 import type { VirtualInput } from '../game/systems/MovementSystem';
 import type { Point } from '../network/types';
 
+/** Запасной размер основания джойстика, если не удалось измерить (реальный задан в main.css), CSS-пиксели. */
 const BASE_SIZE = 140;
-const MAX_RADIUS = 52;
-const DEAD_ZONE = 0.14;
+/** Максимальное смещение ручки от центра, CSS-пиксели. */
+const MAX_RADIUS = 48;
+/** Доля радиуса, при которой персонаж уже бежит на полной скорости (маленького движения пальца достаточно). */
+const FULL_SPEED_AT = 0.55;
+/** Мёртвая зона в долях радиуса: защита от дрожания пальца. */
+const DEAD_ZONE = 0.1;
 
 /**
  * Экранный джойстик на pointer events.
  * Зона касания — нижняя левая часть экрана; джойстик «появляется» под пальцем.
- * Отпускание, отмена касания, потеря фокуса или скрытие вкладки сбрасывают ввод.
+ *
+ * Надёжность:
+ *  - одно активное касание (pointerId), остальные игнорируются;
+ *  - pointermove/up/cancel слушаются на window, поэтому управление не теряется, когда палец
+ *    выходит за пределы зоны (даже если браузер не поддержал pointer capture);
+ *  - отпускание, отмена касания, потеря фокуса, скрытие вкладки и смена ориентации сбрасывают ввод.
  */
 export class MobileControls implements VirtualInput {
   private readonly zone: HTMLElement;
@@ -19,7 +29,7 @@ export class MobileControls implements VirtualInput {
   private vector: Point = { x: 0, y: 0 };
   private center: Point = { x: 0, y: 0 };
 
-  private readonly onWindowBlur = (): void => this.reset();
+  private readonly onResetEvent = (): void => this.reset();
   private readonly onVisibility = (): void => {
     if (document.visibilityState !== 'visible') this.reset();
   };
@@ -43,12 +53,11 @@ export class MobileControls implements VirtualInput {
     parent.appendChild(this.zone);
 
     this.zone.addEventListener('pointerdown', this.onPointerDown);
-    this.zone.addEventListener('pointermove', this.onPointerMove);
-    this.zone.addEventListener('pointerup', this.onPointerEnd);
-    this.zone.addEventListener('pointercancel', this.onPointerEnd);
     this.zone.addEventListener('lostpointercapture', this.onPointerEnd);
     this.zone.addEventListener('contextmenu', (e) => e.preventDefault());
-    window.addEventListener('blur', this.onWindowBlur);
+    window.addEventListener('blur', this.onResetEvent);
+    window.addEventListener('pagehide', this.onResetEvent);
+    window.addEventListener('orientationchange', this.onResetEvent);
     document.addEventListener('visibilitychange', this.onVisibility);
   }
 
@@ -63,30 +72,47 @@ export class MobileControls implements VirtualInput {
     this.base.classList.remove('joystick-base--active');
     this.base.style.removeProperty('--jx');
     this.base.style.removeProperty('--jy');
+    this.detachWindowListeners();
   }
 
   destroy(): void {
     this.reset();
-    window.removeEventListener('blur', this.onWindowBlur);
+    window.removeEventListener('blur', this.onResetEvent);
+    window.removeEventListener('pagehide', this.onResetEvent);
+    window.removeEventListener('orientationchange', this.onResetEvent);
     document.removeEventListener('visibilitychange', this.onVisibility);
     this.zone.remove();
   }
 
   // -------------------------------------------------------------- события
 
+  private attachWindowListeners(): void {
+    window.addEventListener('pointermove', this.onPointerMove, { passive: false });
+    window.addEventListener('pointerup', this.onPointerEnd);
+    window.addEventListener('pointercancel', this.onPointerEnd);
+  }
+
+  private detachWindowListeners(): void {
+    window.removeEventListener('pointermove', this.onPointerMove);
+    window.removeEventListener('pointerup', this.onPointerEnd);
+    window.removeEventListener('pointercancel', this.onPointerEnd);
+  }
+
   private readonly onPointerDown = (e: PointerEvent): void => {
-    if (this.pointerId !== null) return;
+    if (this.pointerId !== null) return; // уже есть активное касание
     e.preventDefault();
+    e.stopPropagation();
     this.pointerId = e.pointerId;
     try {
       this.zone.setPointerCapture(e.pointerId);
     } catch {
-      // не критично: события всё равно придут, пока палец над зоной
+      // не критично: события слушаются на window
     }
+    this.attachWindowListeners();
 
     // Джойстик появляется под пальцем, но остаётся внутри зоны.
     const rect = this.zone.getBoundingClientRect();
-    const half = BASE_SIZE / 2;
+    const half = (this.base.offsetWidth || BASE_SIZE) / 2;
     const cx = Math.min(Math.max(e.clientX, rect.left + half), rect.right - half);
     const cy = Math.min(Math.max(e.clientY, rect.top + half), rect.bottom - half);
     this.center = { x: cx, y: cy };
@@ -103,11 +129,9 @@ export class MobileControls implements VirtualInput {
   };
 
   private readonly onPointerEnd = (e: PointerEvent): void => {
-    if (this.pointerId !== null && e.pointerId !== this.pointerId) return;
+    if (this.pointerId === null || e.pointerId !== this.pointerId) return;
     try {
-      if (this.pointerId !== null && this.zone.hasPointerCapture(e.pointerId)) {
-        this.zone.releasePointerCapture(e.pointerId);
-      }
+      if (this.zone.hasPointerCapture(e.pointerId)) this.zone.releasePointerCapture(e.pointerId);
     } catch {
       // игнорируем
     }
@@ -124,7 +148,13 @@ export class MobileControls implements VirtualInput {
 
     this.knob.style.transform = `translate(${nx * clamped}px, ${ny * clamped}px)`;
 
-    const strength = clamped / MAX_RADIUS;
-    this.vector = strength < DEAD_ZONE ? { x: 0, y: 0 } : { x: nx * strength, y: ny * strength };
+    // Полная скорость достигается уже на FULL_SPEED_AT радиуса, а не на самом краю.
+    const ratio = clamped / MAX_RADIUS;
+    if (ratio < DEAD_ZONE) {
+      this.vector = { x: 0, y: 0 };
+      return;
+    }
+    const strength = Math.min(1, (ratio - DEAD_ZONE) / (FULL_SPEED_AT - DEAD_ZONE));
+    this.vector = { x: nx * strength, y: ny * strength };
   }
 }

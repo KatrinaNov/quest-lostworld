@@ -23,6 +23,7 @@ export class WorldScene extends Phaser.Scene {
   private local!: PlayerAvatar;
   private remotes = new Map<string, PlayerAvatar>();
   private trees: TreeInfo[] = [];
+  private lastFrameTime = 0;
   private position: Point = { x: 0, y: 0 };
   private unsubscribe: Array<() => void> = [];
 
@@ -54,7 +55,11 @@ export class WorldScene extends Phaser.Scene {
   }
 
   override update(time: number, delta: number): void {
-    const dt = Math.min(delta, WORLD_CONFIG.player.maxFrameDeltaMs);
+    // Реальное время между кадрами. Параметр delta Phaser сглаживает, из-за чего при просадках FPS
+    // персонаж двигался бы медленнее, чем 220 единиц в секунду.
+    const elapsed = this.lastFrameTime > 0 ? time - this.lastFrameTime : delta;
+    this.lastFrameTime = time;
+    const dt = Phaser.Math.Clamp(elapsed, 0, WORLD_CONFIG.player.maxFrameDeltaMs);
 
     this.position = this.movement.step(this.position, dt / 1000);
     this.local.tickLocal(this.position.x, this.position.y, this.movement.getDirection(), time);

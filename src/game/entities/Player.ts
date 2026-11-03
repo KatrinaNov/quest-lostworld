@@ -2,6 +2,16 @@ import Phaser from 'phaser';
 import type { Player } from '../../network/types';
 import { PALETTE, WORLD_CONFIG } from '../config/worldConfig';
 
+interface PositionSample {
+  t: number;
+  x: number;
+  y: number;
+}
+
+const MAX_SAMPLES = 16;
+/** Примерный интервал между сетевыми пакетами при движении (мс). */
+const SEND_INTERVAL_HINT_MS = 90;
+
 const NAME_FONT = 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
 
 function shade(color: number, amount: number): number {
@@ -30,16 +40,17 @@ export class PlayerAvatar extends Phaser.GameObjects.Container {
   private moving = false;
   private walkPhase = 0;
 
-  private targetX: number;
-  private targetY: number;
+  /** Буфер полученных по сети позиций удалённого игрока (время прихода на этом устройстве). */
+  private samples: PositionSample[];
+  /** Получена ли хотя бы одна «живая» позиция по Broadcast (первая ставится без анимации). */
+  private gotLivePosition = false;
 
   constructor(scene: Phaser.Scene, player: Player, isLocal: boolean) {
     super(scene, player.x, player.y);
     this.playerId = player.id;
     this.isLocal = isLocal;
     this.color = player.color;
-    this.targetX = player.x;
-    this.targetY = player.y;
+    this.samples = [{ t: performance.now(), x: player.x, y: player.y }];
 
     const shadow = scene.add.ellipse(0, 12, 38, 16, 0x000000, 0.3);
 
@@ -102,10 +113,26 @@ export class PlayerAvatar extends Phaser.GameObjects.Container {
     }
   }
 
-  /** Новая сетевая цель для удалённого игрока. */
+  /** Новая позиция удалённого игрока из сети: кладётся в буфер для интерполяции. */
   setTarget(x: number, y: number): void {
-    this.targetX = x;
-    this.targetY = y;
+    const { teleportDistance, idleGapMs } = WORLD_CONFIG.remote;
+    const now = performance.now();
+    const last = this.samples[this.samples.length - 1];
+
+    // Первая живая позиция, а также большое расхождение (переподключение): ставим сразу.
+    if (!this.gotLivePosition || Math.hypot(x - last.x, y - last.y) > teleportDistance) {
+      this.gotLivePosition = true;
+      this.samples = [{ t: now, x, y }];
+      this.setPosition(x, y);
+      return;
+    }
+
+    // Игрок стоял, а теперь пошёл: без этой точки движение «растянулось» бы на всё время простоя.
+    if (now - last.t > idleGapMs) {
+      this.samples.push({ t: now - SEND_INTERVAL_HINT_MS, x: last.x, y: last.y });
+    }
+    this.samples.push({ t: now, x, y });
+    if (this.samples.length > MAX_SAMPLES) this.samples.shift();
   }
 
   // -------------------------------------------------------------- обновление
@@ -113,29 +140,48 @@ export class PlayerAvatar extends Phaser.GameObjects.Container {
   /** Локальный игрок: позиция задаётся напрямую, без задержки. */
   tickLocal(x: number, y: number, dir: { x: number; y: number }, timeMs: number): void {
     this.setPosition(x, y);
-    this.targetX = x;
-    this.targetY = y;
     const isMoving = dir.x !== 0 || dir.y !== 0;
     this.applyMotion(isMoving, dir, timeMs);
     this.pulse(timeMs);
     this.setDepth(this.y);
   }
 
-  /** Удалённый игрок: плавно догоняем сетевую цель. */
+  /**
+   * Удалённый игрок: показываем позицию на interpolationDelayMs «в прошлом» и интерполируем
+   * между двумя соседними полученными точками. Скорость на экране равна реальной скорости игрока,
+   * а остановка происходит ровно там, где игрок остановился.
+   */
   tickRemote(deltaMs: number, timeMs: number): void {
-    const dx = this.targetX - this.x;
-    const dy = this.targetY - this.y;
-    const dist = Math.hypot(dx, dy);
+    const { interpolationDelayMs, smoothing, teleportDistance } = WORLD_CONFIG.remote;
+    const renderTime = performance.now() - interpolationDelayMs;
 
-    if (dist > WORLD_CONFIG.remote.teleportDistance) {
-      this.setPosition(this.targetX, this.targetY);
-      this.applyMotion(false, this.facing, timeMs);
-    } else {
-      const k = 1 - Math.exp((-WORLD_CONFIG.remote.smoothing * deltaMs) / 1000);
-      this.setPosition(this.x + dx * k, this.y + dy * k);
-      const isMoving = dist > 1.5;
-      this.applyMotion(isMoving, isMoving ? { x: dx / dist, y: dy / dist } : this.facing, timeMs);
+    while (this.samples.length >= 2 && this.samples[1].t <= renderTime) this.samples.shift();
+
+    let targetX = this.samples[0].x;
+    let targetY = this.samples[0].y;
+    if (this.samples.length >= 2) {
+      const a = this.samples[0];
+      const b = this.samples[1];
+      const f = Phaser.Math.Clamp((renderTime - a.t) / Math.max(1, b.t - a.t), 0, 1);
+      targetX = a.x + (b.x - a.x) * f;
+      targetY = a.y + (b.y - a.y) * f;
     }
+
+    const prevX = this.x;
+    const prevY = this.y;
+    if (Math.hypot(targetX - prevX, targetY - prevY) > teleportDistance) {
+      this.setPosition(targetX, targetY);
+    } else {
+      // Лёгкое сглаживание убирает микроскачки между пакетами, не создавая заметного отставания.
+      const k = 1 - Math.exp((-smoothing * deltaMs) / 1000);
+      this.setPosition(prevX + (targetX - prevX) * k, prevY + (targetY - prevY) * k);
+    }
+
+    const moveX = this.x - prevX;
+    const moveY = this.y - prevY;
+    const speed = (Math.hypot(moveX, moveY) / Math.max(1, deltaMs)) * 1000;
+    const isMoving = speed > 25;
+    this.applyMotion(isMoving, isMoving ? { x: moveX, y: moveY } : this.facing, timeMs);
     this.setDepth(this.y);
   }
 

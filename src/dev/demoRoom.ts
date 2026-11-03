@@ -63,6 +63,11 @@ export class DemoRoom extends Emitter<RoomEvents> implements RoomSession {
   sendPosition(x: number, y: number): void {
     this.self.x = x;
     this.self.y = y;
+    // Диагностика скорости в консоли: window.__demoTrack (последние ~600 кадров).
+    const w = window as unknown as { __demoTrack?: Array<[number, number, number]> };
+    const track = (w.__demoTrack ??= []);
+    track.push([performance.now(), x, y]);
+    if (track.length > 600) track.shift();
   }
 
   async leave(): Promise<void> {
