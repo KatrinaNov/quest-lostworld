@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#0b1511" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔮</text></svg>"
+    />
+    <title>Тайна затерянного мира</title>
+  </head>
+  <body>
+    <div id="app" class="app--lobby">
+      <div id="game-root"></div>
+      <div id="ui-root"></div>
+      <div id="toast-root" aria-live="polite"></div>
+      <div id="rotate-overlay" class="rotate-overlay">
+        <div class="rotate-card">
+          <div class="rotate-icon">📱</div>
+          <p>Поверните телефон горизонтально</p>
+          <small>Игра рассчитана на альбомную ориентацию</small>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
