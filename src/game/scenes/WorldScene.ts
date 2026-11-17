@@ -14,6 +14,7 @@ export const REGISTRY_KEYS = {
   virtualInput: 'virtualInput',
   questUi: 'questUi',
   questHud: 'questHud',
+  locationIntro: 'locationIntro',
 } as const;
 
 /**
@@ -38,11 +39,16 @@ export class WorldScene extends Phaser.Scene {
 
   create(): void {
     this.bridge = this.registry.get(REGISTRY_KEYS.bridge) as GameBridge;
+    if (this.bridge.getQuestState().locationId === 2) {
+      this.scene.start(SCENE_KEYS.minecraft);
+      return;
+    }
+
     const virtualInput = (this.registry.get(REGISTRY_KEYS.virtualInput) as VirtualInput | undefined) ?? null;
 
     const { obstacles, trees } = buildWorld(this);
     this.trees = trees;
-    obstacles.push({ x: ISLAND_QUEST.door.x, y: ISLAND_QUEST.door.y - 40, r: 48 });
+    obstacles.push(...ISLAND_QUEST.doorObstacles);
     this.movement = new MovementSystem(this, virtualInput, obstacles);
 
     const self = this.bridge.self;
@@ -55,6 +61,9 @@ export class WorldScene extends Phaser.Scene {
     this.unsubscribe.push(
       this.bridge.on('players', (players) => this.syncPlayers(players)),
       this.bridge.on('position', ({ id, x, y }) => this.remotes.get(id)?.setTarget(x, y)),
+      this.bridge.on('questState', (st) => {
+        if (st.locationId === 2) this.scene.start(SCENE_KEYS.minecraft);
+      }),
     );
 
     const questUi = this.registry.get(REGISTRY_KEYS.questUi) as QuestUiHost | undefined;

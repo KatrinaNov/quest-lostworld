@@ -82,8 +82,8 @@ export class PlayerAvatar extends Phaser.GameObjects.Container {
       .setOrigin(0.5, 1);
 
     this.keyBadge = scene.add
-      .image(22, -42, TEXTURES.questKey)
-      .setScale(0.42)
+      .image(22, -42, TEXTURES.questKeyOrange)
+      .setScale(0.035)
       .setVisible(false)
       .setDepth(9999);
 
@@ -114,7 +114,7 @@ export class PlayerAvatar extends Phaser.GameObjects.Container {
     if (found === this.keyVisible) return;
     this.keyVisible = found;
     this.keyBadge.setVisible(found);
-    this.keyBadge.setTint(this.color);
+    this.keyBadge.clearTint();
   }
 
   setIdentity(name: string, color: number): void {
@@ -126,7 +126,6 @@ export class PlayerAvatar extends Phaser.GameObjects.Container {
       this.color = color;
       this.drawBody();
       this.drawHead();
-      if (this.keyVisible) this.keyBadge.setTint(color);
     }
   }
 

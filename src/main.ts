@@ -8,7 +8,7 @@ import { enterFullscreen, isMobileDevice, isStandalone } from './ui/Fullscreen';
 import type { QuestUiHost } from './game/quest/IslandQuestController';
 import { Hud } from './ui/Hud';
 import { LegendModal } from './ui/LegendModal';
-import { LocationOverlay } from './ui/LocationOverlay';
+import { LocationIntroModal } from './ui/LocationIntroModal';
 import { Lobby } from './ui/Lobby';
 import { MobileControls } from './ui/MobileControls';
 import { Notifications } from './ui/Notifications';
@@ -52,7 +52,7 @@ class App {
   private controls: MobileControls | null = null;
   private legend: LegendModal | null = null;
   private questHud: QuestHud | null = null;
-  private locationOverlay: LocationOverlay | null = null;
+  private locationIntro: LocationIntroModal | null = null;
   private roomListeners: Array<() => void> = [];
   private knownPlayers = new Map<string, string>();
   private leaving = false;
@@ -107,7 +107,7 @@ class App {
     this.hud = new Hud(this.uiRoot, room, () => void this.leave(), this.notifications);
     this.legend = new LegendModal(this.uiRoot);
     this.questHud = new QuestHud(this.uiRoot);
-    this.locationOverlay = new LocationOverlay(this.uiRoot);
+    this.locationIntro = new LocationIntroModal(this.uiRoot);
 
     const questUi: QuestUiHost = {
       setActionAtWorld: (x, y, label, onClick) => this.questHud?.setActionAtWorld(x, y, label, onClick),
@@ -125,10 +125,19 @@ class App {
           'success',
           6500,
         ),
-      onLocationReached: () => this.locationOverlay?.show(),
+      onLocationReached: () => {
+        this.notifications.show('Команда перешла в мир кубов!', 'success', 4500);
+      },
     };
 
-    this.game = createGame(this.gameRoot, room, this.controls, questUi, this.questHud);
+    this.game = createGame(
+      this.gameRoot,
+      room,
+      this.controls,
+      questUi,
+      this.questHud,
+      this.locationIntro,
+    );
 
     this.roomListeners = [
       room.on('status', (status) => {
@@ -187,8 +196,8 @@ class App {
     this.questHud = null;
     this.legend?.close();
     this.legend = null;
-    this.locationOverlay?.destroy();
-    this.locationOverlay = null;
+    this.locationIntro?.close();
+    this.locationIntro = null;
     this.notifications.setBanner(null);
 
     this.setMode('lobby');

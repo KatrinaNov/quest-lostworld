@@ -3,6 +3,7 @@ import type { QuestUiHost } from './quest/IslandQuestController';
 import type { QuestHud } from '../ui/QuestHud';
 import type { GameBridge } from '../network/types';
 import { BootScene } from './scenes/BootScene';
+import { MinecraftScene } from './scenes/MinecraftScene';
 import { PreloadScene } from './scenes/PreloadScene';
 import { REGISTRY_KEYS, WorldScene } from './scenes/WorldScene';
 import type { VirtualInput } from './systems/MovementSystem';
@@ -26,6 +27,7 @@ export function createGame(
   virtualInput: VirtualInput | null,
   questUi: QuestUiHost | null = null,
   questHud: QuestHud | null = null,
+  locationIntro: { openMinecraft: () => void } | null = null,
 ): GameHandle {
   const size = (): { w: number; h: number } => {
     const ratio = pixelRatio();
@@ -43,7 +45,7 @@ export function createGame(
     height: initial.h,
     backgroundColor: '#0b1511',
     scale: { mode: Phaser.Scale.NONE },
-    scene: [BootScene, PreloadScene, WorldScene],
+    scene: [BootScene, PreloadScene, WorldScene, MinecraftScene],
     banner: false,
     disableContextMenu: true,
     render: { antialias: true, roundPixels: true },
@@ -54,6 +56,7 @@ export function createGame(
         g.registry.set(REGISTRY_KEYS.virtualInput, virtualInput);
         g.registry.set(REGISTRY_KEYS.questUi, questUi);
         g.registry.set(REGISTRY_KEYS.questHud, questHud);
+        g.registry.set(REGISTRY_KEYS.locationIntro, locationIntro);
       },
     },
   });

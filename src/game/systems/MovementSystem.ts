@@ -30,6 +30,14 @@ export class MovementSystem {
     private readonly scene: Phaser.Scene,
     private readonly virtual: VirtualInput | null,
     private readonly obstacles: readonly Obstacle[],
+    private readonly bounds: {
+      minX: number;
+      maxX: number;
+      minY: number;
+      maxY: number;
+    } = WORLD_BOUNDS,
+    private readonly speed = WORLD_CONFIG.player.speed,
+    private readonly playerRadius = WORLD_CONFIG.player.radius,
   ) {
     const keyboard = scene.input.keyboard;
     if (keyboard) {
@@ -63,14 +71,13 @@ export class MovementSystem {
   /** Считает новую позицию за dtSeconds с учётом границ мира и препятствий. */
   step(pos: Point, dtSeconds: number): Point {
     this.direction = this.readDirection();
-    const speed = WORLD_CONFIG.player.speed;
-    let x = pos.x + this.direction.x * speed * dtSeconds;
-    let y = pos.y + this.direction.y * speed * dtSeconds;
+    let x = pos.x + this.direction.x * this.speed * dtSeconds;
+    let y = pos.y + this.direction.y * this.speed * dtSeconds;
 
     // Два прохода — достаточно, чтобы аккуратно «скользить» вдоль нескольких препятствий.
     for (let pass = 0; pass < 2; pass += 1) {
       for (const o of this.obstacles) {
-        const minDist = o.r + WORLD_CONFIG.player.radius;
+        const minDist = o.r + this.playerRadius;
         const dx = x - o.x;
         const dy = y - o.y;
         const distSq = dx * dx + dy * dy;
@@ -83,8 +90,8 @@ export class MovementSystem {
     }
 
     return {
-      x: Phaser.Math.Clamp(x, WORLD_BOUNDS.minX, WORLD_BOUNDS.maxX),
-      y: Phaser.Math.Clamp(y, WORLD_BOUNDS.minY, WORLD_BOUNDS.maxY),
+      x: Phaser.Math.Clamp(x, this.bounds.minX, this.bounds.maxX),
+      y: Phaser.Math.Clamp(y, this.bounds.minY, this.bounds.maxY),
     };
   }
 

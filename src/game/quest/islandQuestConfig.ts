@@ -9,8 +9,21 @@ export const ISLAND_QUEST = {
   /** Центральный портал площадки — здесь легенда (тот же объект, что в WorldBuilder). */
   messagePortal: { x: WORLD_CONFIG.portal.x, y: WORLD_CONFIG.portal.y } satisfies Point,
 
-  /** Конец восточной тропы — древняя дверь. */
-  door: { x: 2290, y: 800, interactRadius: 110 } satisfies Point & { interactRadius: number },
+  /**
+   * Конец восточной тропы: «ноги» двери на каменной дорожке (east path ≈ y:800).
+   * x чуть левее края карты, чтобы арка не обрезалась.
+   */
+  door: { x: 2235, y: 812, interactRadius: 100 } satisfies Point & { interactRadius: number },
+
+  /** Масштаб PNG → мир (равномерный, без растягивания). */
+  doorScale: 0.17,
+  keyScale: 0.11,
+
+  /** Коллизии основания двери (круги, как у деревьев). */
+  doorObstacles: [
+    { x: 2235, y: 798, r: 52 },
+    { x: 2235, y: 738, r: 40 },
+  ],
 } as const;
 
 /** Подписи ключей на двери (соответствуют цветам персонажей). */

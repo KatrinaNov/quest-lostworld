@@ -1,0 +1,130 @@
+import Phaser from 'phaser';
+import type { GameBridge, Player } from '../../network/types';
+import {
+  MINECRAFT_BOUNDS,
+  MINECRAFT_CONFIG,
+  minecraftSpawnForPlayer,
+} from '../config/minecraftWorldConfig';
+import { PlayerAvatar } from '../entities/Player';
+import { MovementSystem, type VirtualInput } from '../systems/MovementSystem';
+import { buildMinecraftWorld } from '../world/MinecraftWorldBuilder';
+import { REGISTRY_KEYS } from './WorldScene';
+import { SCENE_KEYS } from './BootScene';
+
+/** Локация 2 — блочный мир (вид сверху). */
+export class MinecraftScene extends Phaser.Scene {
+  private bridge!: GameBridge;
+  private movement!: MovementSystem;
+  private local!: PlayerAvatar;
+  private remotes = new Map<string, PlayerAvatar>();
+  private lastFrameTime = 0;
+  private position = { x: 0, y: 0 };
+  private unsubscribe: Array<() => void> = [];
+
+  constructor() {
+    super(SCENE_KEYS.minecraft);
+  }
+
+  create(): void {
+    this.cameras.main.setBackgroundColor('#6dae5a');
+    this.bridge = this.registry.get(REGISTRY_KEYS.bridge) as GameBridge;
+    const virtualInput = (this.registry.get(REGISTRY_KEYS.virtualInput) as VirtualInput | undefined) ?? null;
+
+    const { obstacles } = buildMinecraftWorld(this);
+    this.movement = new MovementSystem(
+      this,
+      virtualInput,
+      obstacles,
+      MINECRAFT_BOUNDS,
+      MINECRAFT_CONFIG.player.speed,
+      MINECRAFT_CONFIG.player.radius,
+    );
+
+    const spawn = minecraftSpawnForPlayer(this.bridge.getPlayers(), this.bridge.self.id);
+    this.position = { x: spawn.x, y: spawn.y };
+    this.bridge.sendPosition(spawn.x, spawn.y);
+
+    this.local = new PlayerAvatar(this, { ...this.bridge.self, x: spawn.x, y: spawn.y }, true);
+    this.setupCamera();
+    this.syncPlayers(this.bridge.getPlayers());
+
+    const questHud = this.registry.get(REGISTRY_KEYS.questHud) as import('../../ui/QuestHud').QuestHud | undefined;
+    questHud?.bindScene(this);
+    questHud?.clearWorldUi();
+    questHud?.setPortalBanner(false);
+
+    this.unsubscribe.push(
+      this.bridge.on('players', (players) => this.syncPlayers(players)),
+      this.bridge.on('position', ({ id, x, y }) => this.remotes.get(id)?.setTarget(x, y)),
+      this.bridge.on('questState', (st) => {
+        if (st.locationId === 1) this.scene.start(SCENE_KEYS.world);
+      }),
+    );
+
+    const intro = this.registry.get(REGISTRY_KEYS.locationIntro) as
+      | { openMinecraft: () => void }
+      | undefined;
+    intro?.openMinecraft();
+
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.cleanup());
+  }
+
+  override update(time: number, delta: number): void {
+    const elapsed = this.lastFrameTime > 0 ? time - this.lastFrameTime : delta;
+    this.lastFrameTime = time;
+    const dt = Phaser.Math.Clamp(elapsed, 0, MINECRAFT_CONFIG.player.maxFrameDeltaMs);
+
+    this.position = this.movement.step(this.position, dt / 1000);
+    this.local.tickLocal(this.position.x, this.position.y, this.movement.getDirection(), time);
+    this.bridge.sendPosition(this.position.x, this.position.y);
+
+    for (const avatar of this.remotes.values()) avatar.tickRemote(dt, time);
+  }
+
+  private syncPlayers(players: Player[]): void {
+    const seen = new Set<string>();
+    for (const player of players) {
+      if (player.id === this.bridge.self.id) {
+        this.local.setIdentity(player.name, player.color);
+        continue;
+      }
+      seen.add(player.id);
+      const existing = this.remotes.get(player.id);
+      if (existing) existing.setIdentity(player.name, player.color);
+      else this.remotes.set(player.id, new PlayerAvatar(this, player, false));
+    }
+    for (const [id, avatar] of this.remotes) {
+      if (!seen.has(id)) {
+        avatar.destroy();
+        this.remotes.delete(id);
+      }
+    }
+  }
+
+  private setupCamera(): void {
+    const cam = this.cameras.main;
+    cam.setBounds(0, 0, MINECRAFT_CONFIG.width, MINECRAFT_CONFIG.height);
+    cam.setRoundPixels(true);
+    const { followLerp } = MINECRAFT_CONFIG.camera;
+    cam.startFollow(this.local, true, followLerp, followLerp);
+    cam.centerOn(this.local.x, this.local.y);
+    this.applyZoom();
+    this.scale.on(Phaser.Scale.Events.RESIZE, this.applyZoom, this);
+  }
+
+  private applyZoom(): void {
+    const { width, height } = this.scale;
+    if (height <= 0 || width <= 0) return;
+    const { viewHeight, viewWidth, maxCssZoom } = MINECRAFT_CONFIG.camera;
+    const ratio = Math.min(window.devicePixelRatio || 1, 2);
+    this.cameras.main.setZoom(Math.min(height / viewHeight, width / viewWidth, maxCssZoom * ratio));
+  }
+
+  private cleanup(): void {
+    for (const off of this.unsubscribe) off();
+    this.unsubscribe = [];
+    this.scale.off(Phaser.Scale.Events.RESIZE, this.applyZoom, this);
+    this.movement.destroy();
+    this.remotes.clear();
+  }
+}

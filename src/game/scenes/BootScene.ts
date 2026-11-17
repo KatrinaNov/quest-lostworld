@@ -4,6 +4,7 @@ export const SCENE_KEYS = {
   boot: 'BootScene',
   preload: 'PreloadScene',
   world: 'WorldScene',
+  minecraft: 'MinecraftScene',
 } as const;
 
 /** Первичная настройка и переход к загрузке ресурсов. */

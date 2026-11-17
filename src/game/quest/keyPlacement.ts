@@ -33,7 +33,7 @@ function isValidSpot(p: Point, existing: Point[]): boolean {
   const plaza = WORLD_CONFIG.plaza;
   if (dist(p, plaza) < PLAZA_CLEAR) return false;
   if (dist(p, WORLD_CONFIG.portal) < 200) return false;
-  if (dist(p, ISLAND_QUEST.door) < 320) return false;
+  if (dist(p, ISLAND_QUEST.door) < 520) return false;
 
   const center = { x: WORLD_CONFIG.width / 2, y: WORLD_CONFIG.height / 2 };
   if (dist(p, center) < 420) return false;
@@ -55,8 +55,12 @@ function samplePoint(rng: () => number, side: number): Point {
   switch (side % 4) {
     case 0:
       return { x: minX + inset + t * spanX, y: minY + inset + rng() * 80 };
-    case 1:
-      return { x: maxX - inset - rng() * 80, y: minY + inset + t * spanY };
+    case 1: {
+      const y = minY + inset + t * spanY;
+      const x = maxX - inset - rng() * 80;
+      if (Math.abs(y - ISLAND_QUEST.door.y) < 220) return { x: maxX - inset - 200 - rng() * 120, y: y + (y < ISLAND_QUEST.door.y ? -180 : 180) };
+      return { x, y };
+    }
     case 2:
       return { x: minX + inset + t * spanX, y: maxY - inset - rng() * 80 };
     default:
