@@ -9,6 +9,7 @@ import { PlayerAvatar } from '../entities/Player';
 import { MovementSystem, type VirtualInput } from '../systems/MovementSystem';
 import { mcWaterFrameKey } from './minecraftPreloadTextures';
 import { buildMinecraftWorld } from '../world/MinecraftWorldBuilder';
+import type { MinecraftTreeInfo } from '../world/MinecraftWorldBuilder';
 import { REGISTRY_KEYS } from './WorldScene';
 import { SCENE_KEYS } from './BootScene';
 
@@ -23,6 +24,7 @@ export class MinecraftScene extends Phaser.Scene {
   private unsubscribe: Array<() => void> = [];
   private waterTiles: Phaser.GameObjects.Image[] = [];
   private waterAnimFrame = 0;
+  private trees: MinecraftTreeInfo[] = [];
 
   constructor() {
     super(SCENE_KEYS.minecraft);
@@ -36,6 +38,7 @@ export class MinecraftScene extends Phaser.Scene {
     const built = buildMinecraftWorld(this);
     const { obstacles } = built;
     this.waterTiles = built.waterTiles;
+    this.trees = built.trees;
     this.startWaterAnimation();
     this.movement = new MovementSystem(
       this,
@@ -87,6 +90,22 @@ export class MinecraftScene extends Phaser.Scene {
     this.bridge.sendPosition(this.position.x, this.position.y);
 
     for (const avatar of this.remotes.values()) avatar.tickRemote(dt, time);
+    this.fadeCanopies();
+  }
+
+  /** Кроны становятся прозрачными, если перекрывают одного из игроков. */
+  private fadeCanopies(): void {
+    const avatars = [this.local, ...this.remotes.values()];
+    for (const tree of this.trees) {
+      const hides = avatars.some(
+        (avatar) => avatar.y < tree.y && avatar.y > tree.y - tree.reach && Math.abs(avatar.x - tree.x) < tree.halfWidth,
+      );
+      const target = hides ? 0.36 : 1;
+      if (tree.sprite.alpha !== target) {
+        const next = tree.sprite.alpha + (target - tree.sprite.alpha) * 0.2;
+        tree.sprite.setAlpha(Math.abs(next - target) < 0.01 ? target : next);
+      }
+    }
   }
 
   private syncPlayers(players: Player[]): void {
@@ -148,5 +167,6 @@ export class MinecraftScene extends Phaser.Scene {
     this.movement.destroy();
     this.remotes.clear();
     this.waterTiles = [];
+    this.trees = [];
   }
 }

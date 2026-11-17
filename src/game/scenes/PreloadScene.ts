@@ -12,6 +12,7 @@ export const TEXTURES = {
   treeA: 'tree-a',
   treeB: 'tree-b',
   pine: 'pine',
+  jungleTree: 'jungle-tree',
   pillar: 'pillar',
   pillarBroken: 'pillar-broken',
   rubble: 'rubble',
@@ -210,6 +211,35 @@ export class PreloadScene extends Phaser.Scene {
     };
     tree(TEXTURES.treeA, 0x1b4d30, 0x276b3d, 0x34874c, 0x56a965);
     tree(TEXTURES.treeB, 0x1a4a45, 0x23665c, 0x2f8274, 0x4fa592);
+
+    // Кубическая крона в стилистике Minecraft: отдельные лиственные блоки,
+    // тёмная нижняя грань и светлая верхняя грань.
+    this.makeTexture(TEXTURES.jungleTree, 150, 180, (g) => {
+      const leaf = (x: number, y: number, w: number, h: number, top: number, face: number): void => {
+        g.fillStyle(0x173d25, 0.55);
+        g.fillRect(x + 4, y + 6, w, h);
+        g.fillStyle(face, 1);
+        g.fillRect(x, y, w, h);
+        g.fillStyle(top, 1);
+        g.fillRect(x + 3, y + 3, w - 6, 8);
+        g.lineStyle(2, 0x153620, 0.85);
+        g.strokeRect(x + 1, y + 1, w - 2, h - 2);
+      };
+      g.fillStyle(0x000000, 0.28);
+      g.fillEllipse(75, 161, 86, 22);
+      g.fillStyle(0x53351f, 1);
+      g.fillRect(62, 106, 28, 56);
+      g.fillStyle(0x92643b, 1);
+      g.fillRect(65, 108, 10, 52);
+      g.fillStyle(0x3f2819, 1);
+      g.fillRect(80, 106, 10, 56);
+      leaf(24, 72, 52, 46, 0x61a64b, 0x2e7137);
+      leaf(74, 70, 54, 50, 0x6eae50, 0x32783d);
+      leaf(42, 36, 64, 52, 0x78b957, 0x3c8140);
+      leaf(66, 22, 42, 39, 0x86c761, 0x4a9148);
+      leaf(37, 54, 30, 30, 0x5f9e47, 0x2d6e35);
+      leaf(98, 52, 30, 31, 0x5a9c45, 0x286332);
+    });
 
     // ель
     this.makeTexture(TEXTURES.pine, 120, 190, (g) => {

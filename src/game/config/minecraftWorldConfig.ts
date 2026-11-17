@@ -22,10 +22,10 @@ export const MINECRAFT_CONFIG = {
   /** Поляна у портала — появление команды. */
   portal: { x: 360, y: 1250 } satisfies Point,
   spawnPoints: [
-    { x: 430, y: 1260 },
-    { x: 480, y: 1300 },
-    { x: 390, y: 1320 },
-    { x: 450, y: 1200 },
+    { x: 500, y: 1270 },
+    { x: 520, y: 1320 },
+    { x: 450, y: 1350 },
+    { x: 500, y: 1210 },
   ] satisfies readonly Point[],
 
   player: {
