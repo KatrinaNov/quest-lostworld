@@ -54,7 +54,7 @@ export type ConnectionStatus = 'connecting' | 'connected' | 'reconnecting' | 'di
  * Фаза комнаты. Сейчас только свободное исследование мира.
  * Позже: 'lobby' | 'playing' | 'waiting_real_world' | 'waiting_host' | 'finished' и т.д.
  */
-export type RoomPhase = 'free_roam';
+export type RoomPhase = 'free_roam' | 'location_2';
 
 export type RoomMode = 'create' | 'join';
 
@@ -93,6 +93,8 @@ export interface RoomEvents {
   position: { id: string; x: number; y: number };
   status: ConnectionStatus;
   gameEvent: GameEvent;
+  /** Состояние квеста локации 1 (общее для комнаты). */
+  questState: import('../game/quest/islandQuestTypes').IslandQuestState;
   /** Сессию пришлось завершить (например, комната оказалась переполнена). */
   kicked: RoomLeaveReason;
 }
@@ -106,8 +108,12 @@ export interface GameBridge {
   readonly roomCode: string;
   getPlayers(): Player[];
   getStatus(): ConnectionStatus;
+  getQuestState(): import('../game/quest/islandQuestTypes').IslandQuestState;
   on<K extends keyof RoomEvents>(event: K, listener: (data: RoomEvents[K]) => void): () => void;
   sendPosition(x: number, y: number): void;
+  questPickKey(slot: number): 'ok' | 'wrong_color' | 'taken' | 'slot';
+  questInsertKey(slot: number): 'ok' | 'wrong_color' | 'no_key' | 'slot';
+  questAcknowledgePortal(): void;
 }
 
 /** Сессия комнаты для приложения: мост для игры + возможность выйти. */

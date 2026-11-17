@@ -8,7 +8,10 @@ export interface VirtualInput {
   reset(): void;
 }
 
-type KeyMap = Record<'W' | 'A' | 'S' | 'D' | 'UP' | 'DOWN' | 'LEFT' | 'RIGHT', Phaser.Input.Keyboard.Key>;
+type KeyMap = Record<
+  'W' | 'A' | 'S' | 'D' | 'UP' | 'DOWN' | 'LEFT' | 'RIGHT' | 'E',
+  Phaser.Input.Keyboard.Key
+>;
 
 /**
  * Локальное управление персонажем: клавиатура (WASD / стрелки) + экранный джойстик.
@@ -30,7 +33,7 @@ export class MovementSystem {
   ) {
     const keyboard = scene.input.keyboard;
     if (keyboard) {
-      this.keys = keyboard.addKeys('W,A,S,D,UP,DOWN,LEFT,RIGHT') as KeyMap;
+      this.keys = keyboard.addKeys('W,A,S,D,UP,DOWN,LEFT,RIGHT,E') as KeyMap;
     }
     window.addEventListener('blur', this.onBlur);
     document.addEventListener('visibilitychange', this.onVisibility);
@@ -41,6 +44,13 @@ export class MovementSystem {
   /** Текущее направление движения (длина 0..1, диагональ нормализована). */
   getDirection(): Point {
     return this.direction;
+  }
+
+  /** Одно нажатие E для взаимодействия (ПК). */
+  consumeInteractPress(): boolean {
+    const k = this.keys?.E;
+    if (!k) return false;
+    return Phaser.Input.Keyboard.JustDown(k);
   }
 
   /** Сбрасывает ввод: персонаж останавливается. */

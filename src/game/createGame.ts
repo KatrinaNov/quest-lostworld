@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import type { QuestUiHost } from './quest/IslandQuestController';
 import type { GameBridge } from '../network/types';
 import { BootScene } from './scenes/BootScene';
 import { PreloadScene } from './scenes/PreloadScene';
@@ -18,7 +19,12 @@ function pixelRatio(): number {
  * Создаёт игру Phaser внутри parent. Размер холста = размер контейнера × pixelRatio,
  * CSS растягивает его на весь контейнер.
  */
-export function createGame(parent: HTMLElement, bridge: GameBridge, virtualInput: VirtualInput | null): GameHandle {
+export function createGame(
+  parent: HTMLElement,
+  bridge: GameBridge,
+  virtualInput: VirtualInput | null,
+  questUi: QuestUiHost | null = null,
+): GameHandle {
   const size = (): { w: number; h: number } => {
     const ratio = pixelRatio();
     return {
@@ -44,6 +50,7 @@ export function createGame(parent: HTMLElement, bridge: GameBridge, virtualInput
       preBoot: (g) => {
         g.registry.set(REGISTRY_KEYS.bridge, bridge);
         g.registry.set(REGISTRY_KEYS.virtualInput, virtualInput);
+        g.registry.set(REGISTRY_KEYS.questUi, questUi);
       },
     },
   });

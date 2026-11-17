@@ -1,6 +1,8 @@
+import { IslandQuestSync } from '../network/islandQuestSync';
 import { Emitter } from '../network/emitter';
 import type {
   ConnectionStatus,
+  GameEvent,
   Player,
   RoomEvents,
   RoomSession,
@@ -19,6 +21,8 @@ export class DemoRoom extends Emitter<RoomEvents> implements RoomSession {
   private players: Player[];
   private timer: number | null = null;
   private t = 0;
+  private readonly quest: IslandQuestSync;
+  private readonly questOff: () => void;
 
   constructor(name: string) {
     super();
@@ -38,6 +42,14 @@ export class DemoRoom extends Emitter<RoomEvents> implements RoomSession {
       bot('demo-bot-1', 'Робот Лев', APP_CONFIG.playerColors[1], 1400, 960),
       bot('demo-bot-2', 'Робот Аня', APP_CONFIG.playerColors[2], 1000, 700),
     ];
+
+    this.quest = new IslandQuestSync(
+      this.self,
+      () => this.getPlayers(),
+      (event: GameEvent) => this.emit('gameEvent', event),
+    );
+    this.questOff = this.quest.on('questState', (state) => this.emit('questState', state));
+    this.emit('questState', this.quest.getState());
 
     // Боты обновляют позицию 10 раз в секунду, как настоящие игроки.
     this.timer = window.setInterval(() => {
@@ -60,6 +72,22 @@ export class DemoRoom extends Emitter<RoomEvents> implements RoomSession {
     return 'connected';
   }
 
+  getQuestState() {
+    return this.quest.getState();
+  }
+
+  questPickKey(slot: number) {
+    return this.quest.pickKey(slot);
+  }
+
+  questInsertKey(slot: number) {
+    return this.quest.insertKey(slot);
+  }
+
+  questAcknowledgePortal(): void {
+    this.quest.acknowledgePortal();
+  }
+
   sendPosition(x: number, y: number): void {
     this.self.x = x;
     this.self.y = y;
@@ -73,6 +101,7 @@ export class DemoRoom extends Emitter<RoomEvents> implements RoomSession {
   async leave(): Promise<void> {
     if (this.timer !== null) window.clearInterval(this.timer);
     this.timer = null;
+    this.questOff();
     this.clearListeners();
   }
 }

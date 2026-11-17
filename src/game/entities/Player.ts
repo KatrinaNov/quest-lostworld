@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import type { Player } from '../../network/types';
+import { TEXTURES } from '../scenes/PreloadScene';
 import { PALETTE, WORLD_CONFIG } from '../config/worldConfig';
 
 interface PositionSample {
@@ -44,6 +45,8 @@ export class PlayerAvatar extends Phaser.GameObjects.Container {
   private samples: PositionSample[];
   /** Получена ли хотя бы одна «живая» позиция по Broadcast (первая ставится без анимации). */
   private gotLivePosition = false;
+  private readonly keyBadge: Phaser.GameObjects.Image;
+  private keyVisible = false;
 
   constructor(scene: Phaser.Scene, player: Player, isLocal: boolean) {
     super(scene, player.x, player.y);
@@ -78,6 +81,12 @@ export class PlayerAvatar extends Phaser.GameObjects.Container {
       })
       .setOrigin(0.5, 1);
 
+    this.keyBadge = scene.add
+      .image(22, -42, TEXTURES.questKey)
+      .setScale(0.42)
+      .setVisible(false)
+      .setDepth(9999);
+
     if (isLocal) {
       this.arrow = scene.add.graphics();
       this.arrow.fillStyle(PALETTE.glowGold, 1);
@@ -88,7 +97,7 @@ export class PlayerAvatar extends Phaser.GameObjects.Container {
 
     const children: Phaser.GameObjects.GameObject[] = [shadow];
     if (this.ring) children.push(this.ring);
-    children.push(this.visual, this.label);
+    children.push(this.visual, this.label, this.keyBadge);
     if (this.arrow) children.push(this.arrow);
     this.add(children);
 
@@ -101,6 +110,13 @@ export class PlayerAvatar extends Phaser.GameObjects.Container {
 
   // -------------------------------------------------------------- данные
 
+  setKeyFound(found: boolean): void {
+    if (found === this.keyVisible) return;
+    this.keyVisible = found;
+    this.keyBadge.setVisible(found);
+    this.keyBadge.setTint(this.color);
+  }
+
   setIdentity(name: string, color: number): void {
     if (this.label.text !== name) {
       this.label.setText(name);
@@ -110,6 +126,7 @@ export class PlayerAvatar extends Phaser.GameObjects.Container {
       this.color = color;
       this.drawBody();
       this.drawHead();
+      if (this.keyVisible) this.keyBadge.setTint(color);
     }
   }
 

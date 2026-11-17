@@ -5,6 +5,8 @@ import {
   type SupabaseClient,
 } from '@supabase/supabase-js';
 import { APP_CONFIG } from '../config/appConfig';
+import { createInitialQuestState } from '../game/quest/islandQuestState';
+import { IslandQuestSync } from './islandQuestSync';
 import { Emitter } from './emitter';
 import {
   GameError,
@@ -94,6 +96,8 @@ export class RealtimeRoom extends Emitter<RoomEvents> implements RoomSession {
   private flushTimer: ReturnType<typeof setTimeout> | null = null;
   private settleTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly minIntervalMs = 1000 / APP_CONFIG.positionSendHz;
+  private quest: IslandQuestSync | null = null;
+  private questOff: (() => void) | null = null;
 
   constructor(
     private readonly client: SupabaseClient,
@@ -122,6 +126,22 @@ export class RealtimeRoom extends Emitter<RoomEvents> implements RoomSession {
 
   getStatus(): ConnectionStatus {
     return this.status;
+  }
+
+  getQuestState() {
+    return this.quest?.getState() ?? this.defaultQuestState();
+  }
+
+  questPickKey(slot: number) {
+    return this.quest?.pickKey(slot) ?? 'slot';
+  }
+
+  questInsertKey(slot: number) {
+    return this.quest?.insertKey(slot) ?? 'slot';
+  }
+
+  questAcknowledgePortal(): void {
+    this.quest?.acknowledgePortal();
   }
 
   /**
@@ -186,6 +206,7 @@ export class RealtimeRoom extends Emitter<RoomEvents> implements RoomSession {
 
       this.active = true;
       this.self.connected = true;
+      this.initQuestSync();
       this.applyPresence();
       this.setStatus('connected');
       this.startBackgroundWork();
@@ -221,8 +242,11 @@ export class RealtimeRoom extends Emitter<RoomEvents> implements RoomSession {
 
   /** Универсальное игровое событие для всех участников (задел под будущие механики). */
   sendGameEvent(type: string, payload: unknown): void {
+    this.sendGameEventRaw({ type, from: this.self.id, payload, t: Date.now() });
+  }
+
+  private sendGameEventRaw(event: GameEvent): void {
     if (this.status !== 'connected' || !this.channel) return;
-    const event: GameEvent = { type, from: this.self.id, payload, t: Date.now() };
     void this.channel.send({ type: 'broadcast', event: 'evt', payload: event });
   }
 
@@ -245,6 +269,7 @@ export class RealtimeRoom extends Emitter<RoomEvents> implements RoomSession {
       }
       await this.client.removeChannel(channel).catch(() => undefined);
     }
+    this.destroyQuestSync();
     this.setStatus('disconnected');
     this.clearListeners();
   }
@@ -264,7 +289,9 @@ export class RealtimeRoom extends Emitter<RoomEvents> implements RoomSession {
       .on('broadcast', { event: 'pos' }, ({ payload }) => this.handlePosition(payload))
       .on('broadcast', { event: 'evt' }, ({ payload }) => {
         const event = parseGameEvent(payload);
-        if (event && event.from !== this.self.id) this.emit('gameEvent', event);
+        if (!event || event.from === this.self.id) return;
+        if (event.type.startsWith('quest_')) this.quest?.ingestRemoteEvent(event);
+        this.emit('gameEvent', event);
       });
 
     this.channel = channel;
@@ -320,6 +347,7 @@ export class RealtimeRoom extends Emitter<RoomEvents> implements RoomSession {
     if (!this.active) return;
     this.setStatus('connected');
     this.flushPosition();
+    this.quest?.broadcastFullStateIfNeeded();
   }
 
   private scheduleReconnect(delay: number): void {
@@ -480,7 +508,11 @@ export class RealtimeRoom extends Emitter<RoomEvents> implements RoomSession {
 
     // Появился новый игрок: один раз сообщаем ему свою актуальную позицию
     // (в Presence записана только позиция на момент входа). Это заменяет периодическую рассылку.
-    if (newcomer) this.flushPosition(true);
+    if (newcomer) {
+      this.flushPosition(true);
+      this.quest?.broadcastFullStateIfNeeded();
+    }
+    this.quest?.onPlayersChanged();
   }
 
   private kick(reason: RoomLeaveReason): void {
@@ -559,6 +591,27 @@ export class RealtimeRoom extends Emitter<RoomEvents> implements RoomSession {
     if (document.visibilityState !== 'visible' || !this.active) return;
     if (this.channel?.state !== REALTIME_CHANNEL_STATES.joined) this.rebuildNow();
   };
+
+  private defaultQuestState() {
+    return createInitialQuestState(3);
+  }
+
+  private initQuestSync(): void {
+    this.destroyQuestSync();
+    this.quest = new IslandQuestSync(
+      this.self,
+      () => this.getPlayers(),
+      (event) => this.sendGameEventRaw(event),
+    );
+    this.questOff = this.quest.on('questState', (state) => this.emit('questState', state));
+    this.emit('questState', this.quest.getState());
+  }
+
+  private destroyQuestSync(): void {
+    this.questOff?.();
+    this.questOff = null;
+    this.quest = null;
+  }
 
   private startBackgroundWork(): void {
     window.addEventListener('online', this.onOnline);

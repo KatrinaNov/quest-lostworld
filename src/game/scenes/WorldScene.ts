@@ -2,6 +2,8 @@ import Phaser from 'phaser';
 import type { GameBridge, Player, Point } from '../../network/types';
 import { PlayerAvatar } from '../entities/Player';
 import { MovementSystem, type VirtualInput } from '../systems/MovementSystem';
+import { ISLAND_QUEST } from '../quest/islandQuestConfig';
+import { IslandQuestController, type QuestUiHost } from '../quest/IslandQuestController';
 import { WORLD_CONFIG } from '../config/worldConfig';
 import { buildWorld, type TreeInfo } from '../world/WorldBuilder';
 import { SCENE_KEYS } from './BootScene';
@@ -10,6 +12,7 @@ import { SCENE_KEYS } from './BootScene';
 export const REGISTRY_KEYS = {
   bridge: 'bridge',
   virtualInput: 'virtualInput',
+  questUi: 'questUi',
 } as const;
 
 /**
@@ -26,6 +29,7 @@ export class WorldScene extends Phaser.Scene {
   private lastFrameTime = 0;
   private position: Point = { x: 0, y: 0 };
   private unsubscribe: Array<() => void> = [];
+  private quest: IslandQuestController | null = null;
 
   constructor() {
     super(SCENE_KEYS.world);
@@ -37,6 +41,10 @@ export class WorldScene extends Phaser.Scene {
 
     const { obstacles, trees } = buildWorld(this);
     this.trees = trees;
+    obstacles.push(
+      { x: ISLAND_QUEST.ancientStone.x, y: ISLAND_QUEST.ancientStone.y - 10, r: 22 },
+      { x: ISLAND_QUEST.door.x, y: ISLAND_QUEST.door.y - 40, r: 48 },
+    );
     this.movement = new MovementSystem(this, virtualInput, obstacles);
 
     const self = this.bridge.self;
@@ -50,6 +58,18 @@ export class WorldScene extends Phaser.Scene {
       this.bridge.on('players', (players) => this.syncPlayers(players)),
       this.bridge.on('position', ({ id, x, y }) => this.remotes.get(id)?.setTarget(x, y)),
     );
+
+    const questUi = this.registry.get(REGISTRY_KEYS.questUi) as QuestUiHost | undefined;
+    if (questUi) {
+      this.quest = new IslandQuestController(
+        this,
+        this.bridge,
+        this.movement,
+        questUi,
+        () => this.local,
+        () => this.remotes.values(),
+      );
+    }
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.cleanup());
   }
@@ -69,6 +89,7 @@ export class WorldScene extends Phaser.Scene {
     for (const avatar of this.remotes.values()) avatar.tickRemote(dt, time);
 
     this.fadeCanopies();
+    this.quest?.tick(this.position);
   }
 
   /** Кроны деревьев становятся полупрозрачными, когда за ними стоит игрок — чтобы никто не «пропадал». */
@@ -144,6 +165,8 @@ export class WorldScene extends Phaser.Scene {
     for (const off of this.unsubscribe) off();
     this.unsubscribe = [];
     this.scale.off(Phaser.Scale.Events.RESIZE, this.applyZoom, this);
+    this.quest?.destroy();
+    this.quest = null;
     this.movement.destroy();
     this.remotes.clear();
   }

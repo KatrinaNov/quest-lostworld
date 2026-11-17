@@ -5,10 +5,14 @@ import { WORLD_CONFIG } from './game/config/worldConfig';
 import { createRoom, joinRoom } from './network/roomService';
 import type { Point, RoomSession } from './network/types';
 import { enterFullscreen, isMobileDevice, isStandalone } from './ui/Fullscreen';
+import type { QuestUiHost } from './game/quest/IslandQuestController';
 import { Hud } from './ui/Hud';
+import { LegendModal } from './ui/LegendModal';
+import { LocationOverlay } from './ui/LocationOverlay';
 import { Lobby } from './ui/Lobby';
 import { MobileControls } from './ui/MobileControls';
 import { Notifications } from './ui/Notifications';
+import { QuestHud } from './ui/QuestHud';
 
 function requireById(id: string): HTMLElement {
   const el = document.getElementById(id);
@@ -46,6 +50,9 @@ class App {
   private game: GameHandle | null = null;
   private hud: Hud | null = null;
   private controls: MobileControls | null = null;
+  private legend: LegendModal | null = null;
+  private questHud: QuestHud | null = null;
+  private locationOverlay: LocationOverlay | null = null;
   private roomListeners: Array<() => void> = [];
   private knownPlayers = new Map<string, string>();
   private leaving = false;
@@ -98,7 +105,29 @@ class App {
     this.knownPlayers = new Map(room.getPlayers().map((p) => [p.id, p.name]));
     this.controls = MobileControls.isNeeded() ? new MobileControls(this.uiRoot) : null;
     this.hud = new Hud(this.uiRoot, room, () => void this.leave(), this.notifications);
-    this.game = createGame(this.gameRoot, room, this.controls);
+    this.legend = new LegendModal(this.uiRoot);
+    this.questHud = new QuestHud(this.uiRoot);
+    this.locationOverlay = new LocationOverlay(this.uiRoot);
+
+    const questUi: QuestUiHost = {
+      setHint: (text) => this.questHud?.setHint(text),
+      setAction: (label, onClick) => this.questHud?.setAction(label, onClick),
+      openLegend: (onOpen, onClose) => {
+        onOpen();
+        this.legend?.open({ onClose });
+      },
+      notify: (text, kind = 'info') => this.notifications.show(text, kind),
+      setPortalBanner: (visible, text) => this.questHud?.setPortalBanner(visible, text),
+      onAllKeysDelivered: () =>
+        this.notifications.show(
+          'Все ключи на месте! Команда объединила силы. Древний портал открывается!',
+          'success',
+          6500,
+        ),
+      onLocationReached: () => this.locationOverlay?.show(),
+    };
+
+    this.game = createGame(this.gameRoot, room, this.controls, questUi);
 
     this.roomListeners = [
       room.on('status', (status) => {
@@ -153,6 +182,12 @@ class App {
     this.hud = null;
     this.controls?.destroy();
     this.controls = null;
+    this.questHud?.destroy();
+    this.questHud = null;
+    this.legend?.close();
+    this.legend = null;
+    this.locationOverlay?.destroy();
+    this.locationOverlay = null;
     this.notifications.setBanner(null);
 
     this.setMode('lobby');

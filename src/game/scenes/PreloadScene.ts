@@ -17,6 +17,8 @@ export const TEXTURES = {
   wall: 'wall',
   runeStone: 'rune-stone',
   bush: 'bush',
+  questKey: 'quest-key',
+  ancientDoor: 'ancient-door',
 } as const;
 
 type Draw = (g: Phaser.GameObjects.Graphics) => void;
@@ -38,6 +40,7 @@ export class PreloadScene extends Phaser.Scene {
     this.createTrees();
     this.createRuins();
     this.createBush();
+    this.createQuestAssets();
     this.scene.start(SCENE_KEYS.world);
   }
 
@@ -326,6 +329,41 @@ export class PreloadScene extends Phaser.Scene {
       g.lineBetween(35, 34, 35, 66);
       g.fillStyle(PALETTE.moss, 0.85);
       g.fillCircle(18, 84, 8);
+    });
+  }
+
+  private createQuestAssets(): void {
+    this.makeTexture(TEXTURES.questKey, 56, 72, (g) => {
+      g.fillStyle(0x000000, 0.3);
+      g.fillEllipse(28, 62, 40, 12);
+      g.fillStyle(PALETTE.glowGold, 1);
+      g.fillRoundedRect(22, 18, 12, 34, 4);
+      g.fillCircle(28, 16, 14);
+      g.lineStyle(2, 0x0b1511, 0.6);
+      g.strokeCircle(28, 16, 14);
+      g.lineStyle(2, PALETTE.glowGold, 0.9);
+      g.strokeRoundedRect(22, 18, 12, 34, 4);
+    });
+
+    this.makeTexture(TEXTURES.ancientDoor, 200, 240, (g) => {
+      g.fillStyle(0x000000, 0.32);
+      g.fillEllipse(100, 220, 170, 28);
+      g.fillStyle(PALETTE.stoneDark, 1);
+      g.fillRoundedRect(18, 30, 164, 188, 8);
+      g.fillStyle(PALETTE.stoneMid, 1);
+      g.fillRoundedRect(28, 40, 144, 168, 6);
+      g.lineStyle(5, PALETTE.stoneLight, 0.8);
+      g.strokeRoundedRect(28, 40, 144, 168, 6);
+      // углубления под ключи
+      const slots = [52, 82, 112, 142];
+      for (let i = 0; i < 4; i += 1) {
+        g.fillStyle(0x1a2420, 1);
+        g.fillCircle(slots[i], 124, 11);
+        g.lineStyle(2, PALETTE.stoneDark, 1);
+        g.strokeCircle(slots[i], 124, 11);
+      }
+      g.lineStyle(3, PALETTE.glowViolet, 0.5);
+      g.strokeRoundedRect(44, 64, 112, 112, 12);
     });
   }
 
