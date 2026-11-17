@@ -231,7 +231,6 @@ export class RealtimeRoom extends Emitter<RoomEvents> implements RoomSession {
       this.active = true;
       this.self.connected = true;
       this.initQuestSync();
-      this.initJungleQuestSync();
       this.applyPresence();
       this.setStatus('connected');
       this.startBackgroundWork();
@@ -631,16 +630,24 @@ export class RealtimeRoom extends Emitter<RoomEvents> implements RoomSession {
       () => this.getPlayers(),
       (event) => this.sendGameEventRaw(event),
     );
-    this.questOff = this.quest.on('questState', (state) => this.emit('questState', state));
-    this.emit('questState', this.quest.getState());
+    this.questOff = this.quest.on('questState', (state) => {
+      // Квест джунглей нужен только во второй локации. Не создаём лишние RPC и
+      // Postgres Realtime-канал, пока команда находится на острове с ключами.
+      if (state.locationId === 2) this.initJungleQuestSync();
+      this.emit('questState', state);
+    });
+    const initial = this.quest.getState();
+    if (initial.locationId === 2) this.initJungleQuestSync();
+    this.emit('questState', initial);
   }
 
   private initJungleQuestSync(): void {
-    void this.destroyJungleQuestSync();
-    this.jungleQuest = new JungleQuestSync(this.client, this.roomCode);
-    this.jungleOff = this.jungleQuest.on('jungleState', (state) => this.emit('jungleState', state));
-    void this.jungleQuest.start().then(() => {
-      if (this.jungleQuest) this.emit('jungleState', this.jungleQuest.getState());
+    if (this.jungleQuest) return;
+    const sync = new JungleQuestSync(this.client, this.roomCode);
+    this.jungleQuest = sync;
+    this.jungleOff = sync.on('jungleState', (state) => this.emit('jungleState', state));
+    void sync.start().then(() => {
+      if (this.jungleQuest === sync) this.emit('jungleState', sync.getState());
     }).catch(() => undefined);
   }
 
