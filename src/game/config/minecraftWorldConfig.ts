@@ -12,20 +12,20 @@ export const MINECRAFT_INTRO = {
 } as const;
 
 export const MINECRAFT_CONFIG = {
-  width: 1880,
-  height: 1260,
+  width: 2400,
+  height: 1700,
   boundaryMargin: 56,
   block: 40,
   seed: 34017,
   bakeScale: 1.35,
 
   /** Поляна у портала — появление команды. */
-  portal: { x: 250, y: 650 } satisfies Point,
+  portal: { x: 360, y: 1250 } satisfies Point,
   spawnPoints: [
-    { x: 360, y: 690 },
-    { x: 420, y: 720 },
-    { x: 300, y: 720 },
-    { x: 380, y: 650 },
+    { x: 430, y: 1260 },
+    { x: 480, y: 1300 },
+    { x: 390, y: 1320 },
+    { x: 450, y: 1200 },
   ] satisfies readonly Point[],
 
   player: {
@@ -40,6 +40,26 @@ export const MINECRAFT_CONFIG = {
     maxCssZoom: 1.4,
     followLerp: 0.2,
   },
+} as const;
+
+/** Зоны поверхности (совпадают с исходной геометрией карты). */
+export const MINECRAFT_GROUND = {
+  sand: { originX: 1480, originY: 280, tilesW: 14, tilesH: 10 },
+  water: { originX: 1560, originY: 320, tilesW: 10, tilesH: 7 },
+  pathPoints: [
+    { x: 360, y: 1250 },
+    { x: 650, y: 1130 },
+    { x: 980, y: 1020 },
+    { x: 1320, y: 1000 },
+    { x: 1580, y: 850 },
+    { x: 1770, y: 650 },
+    { x: 1850, y: 480 },
+  ],
+  /** Центры каменных декораций — пятна каменистого грунта под ними. */
+  stonePatches: [
+    [620, 470], [720, 500], [850, 480], [920, 540],
+    [1690, 620], [1850, 640], [1980, 500], [2070, 620],
+  ] as const,
 } as const;
 
 export const MINECRAFT_BOUNDS = {

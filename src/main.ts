@@ -83,7 +83,12 @@ class App {
     }
 
     if (import.meta.env.DEV && new URLSearchParams(window.location.search).get('demo') === '1') {
-      void import('./dev/demoRoom').then(({ DemoRoom }) => this.enterGame(new DemoRoom('Тестер')));
+      void import('./dev/devPreview').then(({ parseDevPreview }) =>
+        import('./dev/demoRoom').then(({ DemoRoom }) => {
+          const preview = parseDevPreview();
+          this.enterGame(new DemoRoom('Тестер', preview));
+        }),
+      );
     }
 
     window.addEventListener('pagehide', () => {

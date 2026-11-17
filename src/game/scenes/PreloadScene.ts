@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { createRng, PALETTE } from '../config/worldConfig';
+import { ensureMinecraftTextures } from './minecraftPreloadTextures';
 import { SCENE_KEYS } from './BootScene';
 
 export const TEXTURES = {
@@ -61,6 +62,7 @@ export class PreloadScene extends Phaser.Scene {
     this.createTrees();
     this.createRuins();
     this.createBush();
+    ensureMinecraftTextures(this);
     this.scene.start(SCENE_KEYS.world);
   }
 

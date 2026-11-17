@@ -7,6 +7,7 @@ import {
 } from '../config/minecraftWorldConfig';
 import { PlayerAvatar } from '../entities/Player';
 import { MovementSystem, type VirtualInput } from '../systems/MovementSystem';
+import { mcWaterFrameKey } from './minecraftPreloadTextures';
 import { buildMinecraftWorld } from '../world/MinecraftWorldBuilder';
 import { REGISTRY_KEYS } from './WorldScene';
 import { SCENE_KEYS } from './BootScene';
@@ -20,6 +21,8 @@ export class MinecraftScene extends Phaser.Scene {
   private lastFrameTime = 0;
   private position = { x: 0, y: 0 };
   private unsubscribe: Array<() => void> = [];
+  private waterTiles: Phaser.GameObjects.Image[] = [];
+  private waterAnimFrame = 0;
 
   constructor() {
     super(SCENE_KEYS.minecraft);
@@ -30,7 +33,10 @@ export class MinecraftScene extends Phaser.Scene {
     this.bridge = this.registry.get(REGISTRY_KEYS.bridge) as GameBridge;
     const virtualInput = (this.registry.get(REGISTRY_KEYS.virtualInput) as VirtualInput | undefined) ?? null;
 
-    const { obstacles } = buildMinecraftWorld(this);
+    const built = buildMinecraftWorld(this);
+    const { obstacles } = built;
+    this.waterTiles = built.waterTiles;
+    this.startWaterAnimation();
     this.movement = new MovementSystem(
       this,
       virtualInput,
@@ -64,7 +70,9 @@ export class MinecraftScene extends Phaser.Scene {
     const intro = this.registry.get(REGISTRY_KEYS.locationIntro) as
       | { openMinecraft: () => void }
       | undefined;
-    intro?.openMinecraft();
+    const skipIntro =
+      import.meta.env.DEV && sessionStorage.getItem('dev-skip-mc-intro') === '1';
+    if (!skipIntro) intro?.openMinecraft();
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.cleanup());
   }
@@ -120,11 +128,25 @@ export class MinecraftScene extends Phaser.Scene {
     this.cameras.main.setZoom(Math.min(height / viewHeight, width / viewWidth, maxCssZoom * ratio));
   }
 
+  private startWaterAnimation(): void {
+    if (this.waterTiles.length === 0) return;
+    this.time.addEvent({
+      delay: 480,
+      loop: true,
+      callback: () => {
+        this.waterAnimFrame = (this.waterAnimFrame + 1) % 4;
+        const key = mcWaterFrameKey(this.waterAnimFrame);
+        for (const tile of this.waterTiles) tile.setTexture(key);
+      },
+    });
+  }
+
   private cleanup(): void {
     for (const off of this.unsubscribe) off();
     this.unsubscribe = [];
     this.scale.off(Phaser.Scale.Events.RESIZE, this.applyZoom, this);
     this.movement.destroy();
     this.remotes.clear();
+    this.waterTiles = [];
   }
 }

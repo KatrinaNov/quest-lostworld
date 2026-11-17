@@ -34,6 +34,25 @@ export class IslandQuestSync extends Emitter<QuestEvents> {
     return this.state;
   }
 
+  /**
+   * Только dev: сразу открыть нужную локацию (без ключей и портала).
+   * В production-сборке метод ничего не делает.
+   */
+  devJumpToLocation(locationId: 1 | 2): void {
+    if (!import.meta.env.DEV) return;
+    const next: IslandQuestState = {
+      ...this.state,
+      locationId,
+      doorOpen: locationId === 2 ? true : this.state.doorOpen,
+      rev: this.state.rev + 1,
+      keyPositions: this.state.keyPositions.map((p) => ({ x: p.x, y: p.y })) as IslandQuestState['keyPositions'],
+      slots: [...this.state.slots] as IslandQuestState['slots'],
+      heldBy: [...this.state.heldBy] as IslandQuestState['heldBy'],
+      portalReady: { ...this.state.portalReady },
+    };
+    this.applyLocal(next);
+  }
+
   onPlayersChanged(): void {
     const target = activeSlotCount(this.getPlayers());
     if (target > this.state.activeSlots && !this.state.doorOpen) {
