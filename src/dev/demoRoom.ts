@@ -11,6 +11,11 @@ import { APP_CONFIG } from '../config/appConfig';
 import { minecraftSpawnForPlayer } from '../game/config/minecraftWorldConfig';
 import { WORLD_CONFIG } from '../game/config/worldConfig';
 import type { DevPreviewOptions } from './devPreview';
+import {
+  initialJungleQuestState,
+  type JungleQuestState,
+  type JungleSymbolId,
+} from '../game/quest/jungleQuestTypes';
 
 /**
  * ТОЛЬКО ДЛЯ РАЗРАБОТКИ (npm run dev, адрес ?demo=1): локальная «комната» без Supabase
@@ -25,6 +30,7 @@ export class DemoRoom extends Emitter<RoomEvents> implements RoomSession {
   private t = 0;
   private readonly quest: IslandQuestSync;
   private readonly questOff: () => void;
+  private jungleState: JungleQuestState = initialJungleQuestState();
 
   constructor(name: string, preview: DevPreviewOptions | null = null) {
     super();
@@ -111,6 +117,49 @@ export class DemoRoom extends Emitter<RoomEvents> implements RoomSession {
 
   questAcknowledgePortal(): void {
     this.quest.acknowledgePortal();
+  }
+
+  getJungleQuestState(): JungleQuestState {
+    return this.jungleState;
+  }
+
+  isJungleQuestReady(): boolean {
+    return true;
+  }
+
+  async jungleClaimSymbol(symbol: JungleSymbolId) {
+    if (this.jungleState.phase !== 'exploring') return 'unavailable' as const;
+    if (this.jungleState.symbols[symbol]) return 'already' as const;
+    const symbols = { ...this.jungleState.symbols, [symbol]: true };
+    const complete = symbols.leaf && symbols.water && symbols.stone;
+    this.jungleState = {
+      ...this.jungleState,
+      revision: this.jungleState.revision + 1,
+      symbols,
+      phase: complete ? 'message_ready' : 'exploring',
+    };
+    this.emit('jungleState', this.jungleState);
+    return 'claimed' as const;
+  }
+
+  async jungleAcknowledgeMessage() {
+    if (this.jungleState.phase !== 'message_ready') return 'ignored' as const;
+    this.jungleState = {
+      ...this.jungleState,
+      revision: this.jungleState.revision + 1,
+      phase: 'secret_word',
+      messageAcknowledged: true,
+    };
+    this.emit('jungleState', this.jungleState);
+    return 'acknowledged' as const;
+  }
+
+  async jungleSubmitSecret(secret: string) {
+    if (this.jungleState.phase !== 'secret_word') return 'ignored' as const;
+    if (secret.trim().toLocaleUpperCase('ru-RU') !== 'ХРАМ') return 'wrong' as const;
+    this.jungleState = { ...this.jungleState, revision: this.jungleState.revision + 1, phase: 'temple_open' };
+    this.emit('jungleState', this.jungleState);
+    return 'opened' as const;
   }
 
   sendPosition(x: number, y: number): void {

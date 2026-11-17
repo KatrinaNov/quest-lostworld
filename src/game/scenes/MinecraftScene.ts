@@ -10,6 +10,8 @@ import { MovementSystem, type VirtualInput } from '../systems/MovementSystem';
 import { mcWaterFrameKey } from './minecraftPreloadTextures';
 import { buildMinecraftWorld } from '../world/MinecraftWorldBuilder';
 import type { MinecraftTreeInfo } from '../world/MinecraftWorldBuilder';
+import { JungleQuestController, type JungleQuestUiHost } from '../quest/JungleQuestController';
+import type { JungleQuestHud } from '../../ui/JungleQuestHud';
 import { REGISTRY_KEYS } from './WorldScene';
 import { SCENE_KEYS } from './BootScene';
 
@@ -25,6 +27,7 @@ export class MinecraftScene extends Phaser.Scene {
   private waterTiles: Phaser.GameObjects.Image[] = [];
   private waterAnimFrame = 0;
   private trees: MinecraftTreeInfo[] = [];
+  private jungleQuest: JungleQuestController | null = null;
 
   constructor() {
     super(SCENE_KEYS.minecraft);
@@ -62,6 +65,24 @@ export class MinecraftScene extends Phaser.Scene {
     questHud?.clearWorldUi();
     questHud?.setPortalBanner(false);
 
+    const jungleHud = this.registry.get(REGISTRY_KEYS.jungleHud) as JungleQuestHud | undefined;
+    if (questHud && jungleHud) {
+      const jungleUi: JungleQuestUiHost = {
+        setActionAtWorld: (x, y, label, onClick) => questHud.setActionAtWorld(x, y, label, onClick),
+        notify: (text, kind = 'info') => {
+          const notifications = this.registry.get(REGISTRY_KEYS.notifications) as { show?: (message: string, type?: 'info' | 'success' | 'warn') => void } | undefined;
+          notifications?.show?.(text, kind);
+        },
+        setJungleProgress: (state) => jungleHud.setProgress(state),
+        showJungleSymbol: (symbol, onClose) => jungleHud.showSymbol(symbol, onClose),
+        showJungleCompletion: (onConfirm) => jungleHud.showCompletion(onConfirm),
+        showJungleSecret: (onSubmit) => jungleHud.showSecret(onSubmit),
+        showJungleTempleOpen: (onClose) => jungleHud.showTempleOpen(onClose),
+        closeJungleModal: () => jungleHud.close(),
+      };
+      this.jungleQuest = new JungleQuestController(this.bridge, this.movement, jungleUi, built.openTemplePassage);
+    }
+
     this.unsubscribe.push(
       this.bridge.on('players', (players) => this.syncPlayers(players)),
       this.bridge.on('position', ({ id, x, y }) => this.remotes.get(id)?.setTarget(x, y)),
@@ -91,6 +112,7 @@ export class MinecraftScene extends Phaser.Scene {
 
     for (const avatar of this.remotes.values()) avatar.tickRemote(dt, time);
     this.fadeCanopies();
+    this.jungleQuest?.tick(this.position);
   }
 
   /** Кроны становятся прозрачными, если перекрывают одного из игроков. */
@@ -165,6 +187,9 @@ export class MinecraftScene extends Phaser.Scene {
     this.unsubscribe = [];
     this.scale.off(Phaser.Scale.Events.RESIZE, this.applyZoom, this);
     this.movement.destroy();
+    this.jungleQuest?.destroy();
+    this.jungleQuest = null;
+    (this.registry.get(REGISTRY_KEYS.jungleHud) as JungleQuestHud | undefined)?.hide();
     this.remotes.clear();
     this.waterTiles = [];
     this.trees = [];

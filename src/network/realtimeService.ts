@@ -6,7 +6,9 @@ import {
 } from '@supabase/supabase-js';
 import { APP_CONFIG } from '../config/appConfig';
 import { createInitialQuestState } from '../game/quest/islandQuestState';
+import { initialJungleQuestState } from '../game/quest/jungleQuestTypes';
 import { IslandQuestSync } from './islandQuestSync';
+import { JungleQuestSync } from './jungleQuestSync';
 import { Emitter } from './emitter';
 import {
   GameError,
@@ -98,6 +100,8 @@ export class RealtimeRoom extends Emitter<RoomEvents> implements RoomSession {
   private readonly minIntervalMs = 1000 / APP_CONFIG.positionSendHz;
   private quest: IslandQuestSync | null = null;
   private questOff: (() => void) | null = null;
+  private jungleQuest: JungleQuestSync | null = null;
+  private jungleOff: (() => void) | null = null;
 
   constructor(
     private readonly client: SupabaseClient,
@@ -142,6 +146,26 @@ export class RealtimeRoom extends Emitter<RoomEvents> implements RoomSession {
 
   questAcknowledgePortal(): void {
     this.quest?.acknowledgePortal();
+  }
+
+  getJungleQuestState() {
+    return this.jungleQuest?.getState() ?? initialJungleQuestState();
+  }
+
+  isJungleQuestReady(): boolean {
+    return this.jungleQuest?.isReady() ?? false;
+  }
+
+  jungleClaimSymbol(symbol: import('../game/quest/jungleQuestTypes').JungleSymbolId) {
+    return this.jungleQuest?.claimSymbol(symbol) ?? Promise.resolve('loading' as const);
+  }
+
+  jungleAcknowledgeMessage() {
+    return this.jungleQuest?.acknowledgeMessage() ?? Promise.resolve('loading' as const);
+  }
+
+  jungleSubmitSecret(secret: string) {
+    return this.jungleQuest?.submitSecret(secret) ?? Promise.resolve('loading' as const);
   }
 
   /**
@@ -207,6 +231,7 @@ export class RealtimeRoom extends Emitter<RoomEvents> implements RoomSession {
       this.active = true;
       this.self.connected = true;
       this.initQuestSync();
+      this.initJungleQuestSync();
       this.applyPresence();
       this.setStatus('connected');
       this.startBackgroundWork();
@@ -270,6 +295,7 @@ export class RealtimeRoom extends Emitter<RoomEvents> implements RoomSession {
       await this.client.removeChannel(channel).catch(() => undefined);
     }
     this.destroyQuestSync();
+    void this.destroyJungleQuestSync();
     this.setStatus('disconnected');
     this.clearListeners();
   }
@@ -348,6 +374,7 @@ export class RealtimeRoom extends Emitter<RoomEvents> implements RoomSession {
     this.setStatus('connected');
     this.flushPosition();
     this.quest?.broadcastFullStateIfNeeded();
+    void this.jungleQuest?.refresh().catch(() => undefined);
   }
 
   private scheduleReconnect(delay: number): void {
@@ -606,6 +633,23 @@ export class RealtimeRoom extends Emitter<RoomEvents> implements RoomSession {
     );
     this.questOff = this.quest.on('questState', (state) => this.emit('questState', state));
     this.emit('questState', this.quest.getState());
+  }
+
+  private initJungleQuestSync(): void {
+    void this.destroyJungleQuestSync();
+    this.jungleQuest = new JungleQuestSync(this.client, this.roomCode);
+    this.jungleOff = this.jungleQuest.on('jungleState', (state) => this.emit('jungleState', state));
+    void this.jungleQuest.start().then(() => {
+      if (this.jungleQuest) this.emit('jungleState', this.jungleQuest.getState());
+    }).catch(() => undefined);
+  }
+
+  private async destroyJungleQuestSync(): Promise<void> {
+    this.jungleOff?.();
+    this.jungleOff = null;
+    const sync = this.jungleQuest;
+    this.jungleQuest = null;
+    if (sync) await sync.destroy();
   }
 
   private destroyQuestSync(): void {

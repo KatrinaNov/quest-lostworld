@@ -33,6 +33,7 @@ export interface BuiltMinecraftWorld {
   obstacles: { x: number; y: number; r: number }[];
   waterTiles: Phaser.GameObjects.Image[];
   trees: MinecraftTreeInfo[];
+  openTemplePassage: () => void;
 }
 
 export interface MinecraftTreeInfo {
@@ -52,7 +53,7 @@ export function buildMinecraftWorld(scene: Phaser.Scene): BuiltMinecraftWorld {
   bakeMinecraftCobblePaths(scene);
 
   addPortal(scene, obstacles, MINECRAFT_CONFIG.portal.x, MINECRAFT_CONFIG.portal.y);
-  addTemple(scene, obstacles, 480, 410);
+  const openTemplePassage = addTemple(scene, obstacles, 480, 410);
   addCamp(scene, obstacles, 1120, 980);
   addJungleBorder(scene, obstacles, trees, treeRng);
   addForest(scene, obstacles, trees, treeRng);
@@ -61,7 +62,7 @@ export function buildMinecraftWorld(scene: Phaser.Scene): BuiltMinecraftWorld {
   addWaterfall(scene, obstacles);
   addRocks(scene, obstacles, treeRng);
 
-  return { obstacles, waterTiles, trees };
+  return { obstacles, waterTiles, trees, openTemplePassage };
 }
 
 function buildTexturedGround(scene: Phaser.Scene): Phaser.GameObjects.Image[] {
@@ -347,7 +348,7 @@ function addBush(scene: Phaser.Scene, obstacles: { x: number; y: number; r: numb
   obstacles.push({ x, y: y - 5, r: 12 * scale });
 }
 
-function addTemple(scene: Phaser.Scene, obstacles: { x: number; y: number; r: number }[], x: number, y: number): void {
+function addTemple(scene: Phaser.Scene, obstacles: { x: number; y: number; r: number }[], x: number, y: number): () => void {
   const g = scene.add.graphics();
   const block = (bx: number, by: number, w: number, h: number, tone = 0x858a7c): void => {
     g.fillStyle(0x344038, 0.72).fillRect(bx + 4, by + 5, w, h);
@@ -411,12 +412,34 @@ function addTemple(scene: Phaser.Scene, obstacles: { x: number; y: number; r: nu
   }
   g.setDepth(y + 180);
 
-  // Full solid footprint: rows overlap well beyond player radius, including stairs and doorway.
+  // Full solid footprint: rows overlap well beyond player radius, including the sealed doorway.
+  const templeBlockers: { x: number; y: number; r: number }[] = [];
   for (let cy = y - 326; cy <= y + 78; cy += 32) {
     for (let cx = x - 158; cx <= x + 158; cx += 32) {
-      obstacles.push({ x: cx, y: cy, r: 23 });
+      templeBlockers.push({ x: cx, y: cy, r: 23 });
     }
   }
+  obstacles.push(...templeBlockers);
+
+  const gate = scene.add.graphics();
+  gate.fillStyle(0x39413a, 1).fillRect(x - 38, y - 86, 76, 88);
+  gate.fillStyle(0x6f766b, 1).fillRect(x - 34, y - 82, 30, 80);
+  gate.fillStyle(0x848879, 1).fillRect(x + 4, y - 82, 30, 80);
+  gate.lineStyle(3, 0x303832, 1).lineBetween(x, y - 80, x, y - 4);
+  gate.setDepth(y + 181);
+
+  let opened = false;
+  return () => {
+    if (opened) return;
+    opened = true;
+    gate.destroy();
+    for (const blocker of templeBlockers) {
+      const isDoorway = Math.abs(blocker.x - x) <= 64 && blocker.y >= y - 110 && blocker.y <= y + 58;
+      if (!isDoorway) continue;
+      const index = obstacles.indexOf(blocker);
+      if (index >= 0) obstacles.splice(index, 1);
+    }
+  };
 }
 
 function addCamp(scene: Phaser.Scene, obstacles: { x: number; y: number; r: number }[], x: number, y: number): void {

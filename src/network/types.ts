@@ -95,6 +95,8 @@ export interface RoomEvents {
   gameEvent: GameEvent;
   /** Состояние квеста локации 1 (общее для комнаты). */
   questState: import('../game/quest/islandQuestTypes').IslandQuestState;
+  /** Серверное состояние интерактива второй локации. */
+  jungleState: import('../game/quest/jungleQuestTypes').JungleQuestState;
   /** Сессию пришлось завершить (например, комната оказалась переполнена). */
   kicked: RoomLeaveReason;
 }
@@ -114,6 +116,11 @@ export interface GameBridge {
   questPickKey(slot: number): 'ok' | 'wrong_color' | 'taken' | 'slot';
   questInsertKey(slot: number): 'ok' | 'wrong_color' | 'no_key' | 'slot';
   questAcknowledgePortal(): void;
+  getJungleQuestState(): import('../game/quest/jungleQuestTypes').JungleQuestState;
+  isJungleQuestReady(): boolean;
+  jungleClaimSymbol(symbol: import('../game/quest/jungleQuestTypes').JungleSymbolId): Promise<import('../game/quest/jungleQuestTypes').JungleQuestActionResult>;
+  jungleAcknowledgeMessage(): Promise<import('../game/quest/jungleQuestTypes').JungleQuestActionResult>;
+  jungleSubmitSecret(secret: string): Promise<import('../game/quest/jungleQuestTypes').JungleQuestActionResult>;
 }
 
 /** Сессия комнаты для приложения: мост для игры + возможность выйти. */

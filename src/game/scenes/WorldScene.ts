@@ -15,6 +15,8 @@ export const REGISTRY_KEYS = {
   questUi: 'questUi',
   questHud: 'questHud',
   locationIntro: 'locationIntro',
+  jungleHud: 'jungleHud',
+  notifications: 'notifications',
 } as const;
 
 /**

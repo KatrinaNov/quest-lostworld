@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import type { QuestUiHost } from './quest/IslandQuestController';
 import type { QuestHud } from '../ui/QuestHud';
+import type { JungleQuestHud } from '../ui/JungleQuestHud';
 import type { GameBridge } from '../network/types';
 import { BootScene } from './scenes/BootScene';
 import { MinecraftScene } from './scenes/MinecraftScene';
@@ -28,6 +29,8 @@ export function createGame(
   questUi: QuestUiHost | null = null,
   questHud: QuestHud | null = null,
   locationIntro: { openMinecraft: () => void } | null = null,
+  jungleHud: JungleQuestHud | null = null,
+  notifications: { show: (text: string, kind?: 'info' | 'success' | 'warn') => void } | null = null,
 ): GameHandle {
   const size = (): { w: number; h: number } => {
     const ratio = pixelRatio();
@@ -57,6 +60,8 @@ export function createGame(
         g.registry.set(REGISTRY_KEYS.questUi, questUi);
         g.registry.set(REGISTRY_KEYS.questHud, questHud);
         g.registry.set(REGISTRY_KEYS.locationIntro, locationIntro);
+        g.registry.set(REGISTRY_KEYS.jungleHud, jungleHud);
+        g.registry.set(REGISTRY_KEYS.notifications, notifications);
       },
     },
   });
