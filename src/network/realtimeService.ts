@@ -593,13 +593,14 @@ export class RealtimeRoom extends Emitter<RoomEvents> implements RoomSession {
   };
 
   private defaultQuestState() {
-    return createInitialQuestState(3);
+    return createInitialQuestState(3, this.roomCode);
   }
 
   private initQuestSync(): void {
     this.destroyQuestSync();
     this.quest = new IslandQuestSync(
       this.self,
+      this.roomCode,
       () => this.getPlayers(),
       (event) => this.sendGameEventRaw(event),
     );

@@ -6,6 +6,15 @@ export type QuestLocationId = 1 | 2;
 export interface IslandQuestState {
   /** Версия состояния: при конфликте берётся большее значение. */
   rev: number;
+  /** Сид раскладки (из кода комнаты) — не меняется в сессии. */
+  layoutSeed: number;
+  /** Координаты ключей на карте, общие для комнаты. */
+  keyPositions: [
+    { x: number; y: number },
+    { x: number; y: number },
+    { x: number; y: number },
+    { x: number; y: number },
+  ];
   /** Сколько слотов ключей активно (3 или 4). */
   activeSlots: number;
   slots: [KeyPhase, KeyPhase, KeyPhase, KeyPhase];

@@ -1,11 +1,15 @@
 import { APP_CONFIG } from '../../config/appConfig';
 import type { Player } from '../../network/types';
+import { generateKeyPositions, hashRoomCode } from './keyPlacement';
 import type { IslandQuestState, KeyPhase } from './islandQuestTypes';
 
-export function createInitialQuestState(activeSlots: number): IslandQuestState {
+export function createInitialQuestState(activeSlots: number, roomCode: string): IslandQuestState {
   const n = Math.max(1, Math.min(APP_CONFIG.maxPlayers, activeSlots));
+  const keyPositions = generateKeyPositions(roomCode);
   return {
     rev: 0,
+    layoutSeed: hashRoomCode(roomCode),
+    keyPositions,
     activeSlots: n,
     slots: ['map', 'map', 'map', 'map'],
     heldBy: [null, null, null, null],
@@ -29,6 +33,7 @@ export function activeSlotCount(players: Player[]): number {
 function cloneState(state: IslandQuestState): IslandQuestState {
   return {
     ...state,
+    keyPositions: state.keyPositions.map((p) => ({ x: p.x, y: p.y })) as IslandQuestState['keyPositions'],
     slots: [...state.slots] as IslandQuestState['slots'],
     heldBy: [...state.heldBy] as IslandQuestState['heldBy'],
     portalReady: { ...state.portalReady },

@@ -45,6 +45,7 @@ export class DemoRoom extends Emitter<RoomEvents> implements RoomSession {
 
     this.quest = new IslandQuestSync(
       this.self,
+      this.roomCode,
       () => this.getPlayers(),
       (event: GameEvent) => this.emit('gameEvent', event),
     );

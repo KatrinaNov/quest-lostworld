@@ -13,6 +13,7 @@ export const REGISTRY_KEYS = {
   bridge: 'bridge',
   virtualInput: 'virtualInput',
   questUi: 'questUi',
+  questHud: 'questHud',
 } as const;
 
 /**
@@ -41,10 +42,7 @@ export class WorldScene extends Phaser.Scene {
 
     const { obstacles, trees } = buildWorld(this);
     this.trees = trees;
-    obstacles.push(
-      { x: ISLAND_QUEST.ancientStone.x, y: ISLAND_QUEST.ancientStone.y - 10, r: 22 },
-      { x: ISLAND_QUEST.door.x, y: ISLAND_QUEST.door.y - 40, r: 48 },
-    );
+    obstacles.push({ x: ISLAND_QUEST.door.x, y: ISLAND_QUEST.door.y - 40, r: 48 });
     this.movement = new MovementSystem(this, virtualInput, obstacles);
 
     const self = this.bridge.self;
@@ -60,6 +58,9 @@ export class WorldScene extends Phaser.Scene {
     );
 
     const questUi = this.registry.get(REGISTRY_KEYS.questUi) as QuestUiHost | undefined;
+    const questHud = this.registry.get(REGISTRY_KEYS.questHud) as import('../../ui/QuestHud').QuestHud | undefined;
+    questHud?.bindScene(this);
+
     if (questUi) {
       this.quest = new IslandQuestController(
         this,

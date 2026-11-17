@@ -110,8 +110,9 @@ class App {
     this.locationOverlay = new LocationOverlay(this.uiRoot);
 
     const questUi: QuestUiHost = {
-      setHint: (text) => this.questHud?.setHint(text),
-      setAction: (label, onClick) => this.questHud?.setAction(label, onClick),
+      setActionAtWorld: (x, y, label, onClick) => this.questHud?.setActionAtWorld(x, y, label, onClick),
+      setHintAtWorld: (x, y, text) => this.questHud?.setHintAtWorld(x, y, text),
+      clearWorldUi: () => this.questHud?.clearWorldUi(),
       openLegend: (onOpen, onClose) => {
         onOpen();
         this.legend?.open({ onClose });
@@ -127,7 +128,7 @@ class App {
       onLocationReached: () => this.locationOverlay?.show(),
     };
 
-    this.game = createGame(this.gameRoot, room, this.controls, questUi);
+    this.game = createGame(this.gameRoot, room, this.controls, questUi, this.questHud);
 
     this.roomListeners = [
       room.on('status', (status) => {

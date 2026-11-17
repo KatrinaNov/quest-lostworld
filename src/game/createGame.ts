@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import type { QuestUiHost } from './quest/IslandQuestController';
+import type { QuestHud } from '../ui/QuestHud';
 import type { GameBridge } from '../network/types';
 import { BootScene } from './scenes/BootScene';
 import { PreloadScene } from './scenes/PreloadScene';
@@ -24,6 +25,7 @@ export function createGame(
   bridge: GameBridge,
   virtualInput: VirtualInput | null,
   questUi: QuestUiHost | null = null,
+  questHud: QuestHud | null = null,
 ): GameHandle {
   const size = (): { w: number; h: number } => {
     const ratio = pixelRatio();
@@ -51,6 +53,7 @@ export function createGame(
         g.registry.set(REGISTRY_KEYS.bridge, bridge);
         g.registry.set(REGISTRY_KEYS.virtualInput, virtualInput);
         g.registry.set(REGISTRY_KEYS.questUi, questUi);
+        g.registry.set(REGISTRY_KEYS.questHud, questHud);
       },
     },
   });

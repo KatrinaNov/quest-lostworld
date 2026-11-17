@@ -9,91 +9,106 @@ import type { IslandQuestState } from './islandQuestTypes';
 export class IslandQuestWorld {
   private readonly scene: Phaser.Scene;
   private readonly keys: Phaser.GameObjects.Image[] = [];
+  private readonly keyGlows: Phaser.GameObjects.Image[] = [];
   private readonly slotLights: Phaser.GameObjects.Arc[] = [];
   private readonly doorGlow: Phaser.GameObjects.Image;
   private readonly portalLight: Phaser.GameObjects.Image;
+  private readonly doorSprite: Phaser.GameObjects.Image;
   private doorOpenVisual = false;
+  private floatStarted = false;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
-    const { ancientStone, door } = ISLAND_QUEST;
+    const { door } = ISLAND_QUEST;
 
-    const stoneGlow = scene.add
-      .image(ancientStone.x, ancientStone.y - 50, TEXTURES.glow)
-      .setScale(1.2)
-      .setTint(PALETTE.glowCyan)
-      .setBlendMode(Phaser.BlendModes.ADD)
-      .setAlpha(0.35)
-      .setDepth(ancientStone.y - 2);
-    scene.tweens.add({
-      targets: stoneGlow,
-      alpha: { from: 0.25, to: 0.5 },
-      duration: 2000,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.inOut',
-    });
-
-    scene.add
-      .image(ancientStone.x, ancientStone.y, TEXTURES.runeStone)
-      .setOrigin(0.5, 0.85)
-      .setScale(1.65)
-      .setDepth(ancientStone.y);
-    scene.add
-      .image(door.x, door.y - 20, TEXTURES.ancientDoor)
-      .setOrigin(0.5, 0.92)
-      .setScale(1.15)
+    this.doorSprite = scene.add
+      .image(door.x, door.y - 12, TEXTURES.ancientDoor)
+      .setOrigin(0.5, 0.94)
+      .setScale(1.32)
       .setDepth(door.y);
 
     this.doorGlow = scene.add
-      .image(door.x, door.y - 30, TEXTURES.glow)
-      .setScale(2.4)
+      .image(door.x, door.y - 40, TEXTURES.glow)
+      .setScale(2.8)
       .setTint(PALETTE.glowViolet)
       .setBlendMode(Phaser.BlendModes.ADD)
-      .setAlpha(0)
+      .setAlpha(0.12)
       .setDepth(door.y - 1);
 
     this.portalLight = scene.add
-      .image(door.x, door.y - 50, TEXTURES.portalCore)
-      .setScale(0.35)
+      .image(door.x, door.y - 92, TEXTURES.portalCore)
+      .setScale(0.42)
       .setBlendMode(Phaser.BlendModes.ADD)
       .setAlpha(0)
       .setDepth(door.y + 1);
 
     for (let i = 0; i < 4; i += 1) {
-      const light = scene.add.circle(door.x - 54 + i * 36, door.y - 62, 9, APP_CONFIG.playerColors[i], 0.15);
-      light.setStrokeStyle(2, APP_CONFIG.playerColors[i], 0.4);
+      const light = scene.add.circle(door.x - 62 + i * 42, door.y - 76, 10, APP_CONFIG.playerColors[i], 0.15);
+      light.setStrokeStyle(2, APP_CONFIG.playerColors[i], 0.45);
       light.setDepth(door.y + 2);
       light.setVisible(false);
       this.slotLights.push(light);
     }
 
-    for (let i = 0; i < ISLAND_QUEST.keys.length; i += 1) {
-      const p = ISLAND_QUEST.keys[i];
-      const key = scene.add
-        .image(p.x, p.y, TEXTURES.questKey)
+    for (let i = 0; i < 4; i += 1) {
+      const glow = scene.add
+        .image(0, 0, TEXTURES.glow)
+        .setScale(0.55)
         .setTint(APP_CONFIG.playerColors[i])
-        .setOrigin(0.5, 0.9)
-        .setDepth(p.y);
-      scene.tweens.add({
-        targets: key,
-        y: p.y - 6,
-        duration: 1400 + i * 120,
-        yoyo: true,
-        repeat: -1,
-        ease: 'Sine.inOut',
-      });
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setAlpha(0.45)
+        .setDepth(1);
+      const key = scene.add
+        .image(0, 0, TEXTURES.questKey)
+        .setOrigin(0.5, 0.88)
+        .setScale(1.05)
+        .setDepth(2);
+      this.keyGlows.push(glow);
       this.keys.push(key);
     }
-
   }
 
   applyState(state: IslandQuestState): void {
+    if (!this.floatStarted) {
+      this.floatStarted = true;
+      for (let i = 0; i < this.keys.length; i += 1) {
+        const key = this.keys[i];
+        const glow = this.keyGlows[i];
+        this.scene.tweens.add({
+          targets: [key, glow],
+          y: `+=${5 + i}`,
+          duration: 1500 + i * 140,
+          yoyo: true,
+          repeat: -1,
+          ease: 'Sine.inOut',
+        });
+        this.scene.tweens.add({
+          targets: key,
+          angle: { from: -5, to: 5 },
+          duration: 2200 + i * 90,
+          yoyo: true,
+          repeat: -1,
+          ease: 'Sine.inOut',
+        });
+      }
+    }
+
     for (let i = 0; i < 4; i += 1) {
-      const active = i < state.activeSlots;
+      const p = state.keyPositions[i];
       const key = this.keys[i];
+      const glow = this.keyGlows[i];
+      key.setPosition(p.x, p.y);
+      key.setTint(APP_CONFIG.playerColors[i]);
+      glow.setPosition(p.x, p.y - 18);
+      glow.setTint(APP_CONFIG.playerColors[i]);
+      const depth = p.y;
+      key.setDepth(depth);
+      glow.setDepth(depth - 1);
+
+      const active = i < state.activeSlots;
       const onMap = active && state.slots[i] === 'map';
       key.setVisible(onMap);
+      glow.setVisible(onMap);
 
       const slot = this.slotLights[i];
       slot.setVisible(active);
@@ -107,7 +122,7 @@ export class IslandQuestWorld {
         slot.setFillStyle(color, 0.55);
         slot.setStrokeStyle(2, color, 0.9);
       } else {
-        slot.setFillStyle(0x1a2420, 0.7);
+        slot.setFillStyle(0x1a2420, 0.75);
         slot.setStrokeStyle(2, color, 0.45);
       }
     }
@@ -116,14 +131,22 @@ export class IslandQuestWorld {
       this.doorOpenVisual = true;
       this.scene.tweens.add({
         targets: [this.doorGlow, this.portalLight],
-        alpha: { from: 0, to: 1 },
+        alpha: { from: 0.15, to: 0.95 },
         duration: 900,
         ease: 'Sine.out',
       });
       this.scene.tweens.add({
+        targets: this.doorSprite,
+        scaleX: 1.32 * 1.04,
+        scaleY: 1.32 * 0.98,
+        duration: 600,
+        yoyo: true,
+        repeat: 1,
+      });
+      this.scene.tweens.add({
         targets: this.portalLight,
-        scale: { from: 0.35, to: 0.5 },
-        duration: 1200,
+        scale: { from: 0.42, to: 0.58 },
+        duration: 1400,
         yoyo: true,
         repeat: -1,
         ease: 'Sine.inOut',
@@ -132,8 +155,8 @@ export class IslandQuestWorld {
         if (slot.visible) {
           this.scene.tweens.add({
             targets: slot,
-            scale: { from: 1, to: 1.25 },
-            duration: 400,
+            scale: { from: 1, to: 1.3 },
+            duration: 420,
             yoyo: true,
             repeat: 2,
           });
@@ -143,20 +166,8 @@ export class IslandQuestWorld {
 
     if (!state.doorOpen) {
       this.doorOpenVisual = false;
-      this.doorGlow.setAlpha(0);
+      this.doorGlow.setAlpha(0.12);
       this.portalLight.setAlpha(0);
     }
-  }
-
-  getDoorPosition() {
-    return ISLAND_QUEST.door;
-  }
-
-  getStonePosition() {
-    return ISLAND_QUEST.ancientStone;
-  }
-
-  getKeyPosition(slot: number) {
-    return ISLAND_QUEST.keys[slot];
   }
 }

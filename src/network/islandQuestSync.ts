@@ -22,11 +22,12 @@ export class IslandQuestSync extends Emitter<QuestEvents> {
 
   constructor(
     private readonly self: Player,
+    roomCode: string,
     private getPlayers: () => Player[],
     private readonly sendRemote: (event: GameEvent) => void,
   ) {
     super();
-    this.state = createInitialQuestState(activeSlotCount(getPlayers()));
+    this.state = createInitialQuestState(activeSlotCount(getPlayers()), roomCode);
   }
 
   getState(): IslandQuestState {
@@ -36,7 +37,15 @@ export class IslandQuestSync extends Emitter<QuestEvents> {
   onPlayersChanged(): void {
     const target = activeSlotCount(this.getPlayers());
     if (target > this.state.activeSlots && !this.state.doorOpen) {
-      const next = { ...this.state, activeSlots: target, rev: this.state.rev + 1 };
+      const next: IslandQuestState = {
+        ...this.state,
+        activeSlots: target,
+        rev: this.state.rev + 1,
+        keyPositions: this.state.keyPositions.map((p) => ({ x: p.x, y: p.y })) as IslandQuestState['keyPositions'],
+        slots: [...this.state.slots] as IslandQuestState['slots'],
+        heldBy: [...this.state.heldBy] as IslandQuestState['heldBy'],
+        portalReady: { ...this.state.portalReady },
+      };
       this.applyLocal(next);
     }
   }
@@ -45,7 +54,7 @@ export class IslandQuestSync extends Emitter<QuestEvents> {
   ingestSync(payload: unknown): void {
     if (typeof payload !== 'object' || payload === null || !('state' in payload)) return;
     const st = (payload as QuestSyncPayload).state;
-    if (!st || typeof st.rev !== 'number') return;
+    if (!st || typeof st.rev !== 'number' || !st.keyPositions) return;
     const merged = mergeQuestState(this.state, st);
     if (merged.rev !== this.state.rev) this.applyLocal(merged);
   }
@@ -117,7 +126,6 @@ export class IslandQuestSync extends Emitter<QuestEvents> {
 
   /** Новый игрок или переподключение: рассылаем снимок, если есть прогресс. */
   broadcastFullStateIfNeeded(): void {
-    if (this.state.rev === 0) return;
     this.broadcastFullState();
   }
 

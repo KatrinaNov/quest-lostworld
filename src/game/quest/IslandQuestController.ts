@@ -1,4 +1,5 @@
 import type Phaser from 'phaser';
+import { WORLD_CONFIG } from '../config/worldConfig';
 import type { GameBridge, Point } from '../../network/types';
 import { colorToSlot } from './islandQuestState';
 import { ISLAND_QUEST, KEY_COLOR_LABELS } from './islandQuestConfig';
@@ -9,13 +10,22 @@ import type { PlayerAvatar } from '../entities/Player';
 import type { MovementSystem } from '../systems/MovementSystem';
 
 export interface QuestUiHost {
-  setHint(text: string | null): void;
-  setAction(label: string | null, onClick: (() => void) | null): void;
+  setActionAtWorld(worldX: number, worldY: number, label: string | null, onClick: (() => void) | null): void;
+  setHintAtWorld(worldX: number, worldY: number, text: string | null): void;
+  clearWorldUi(): void;
   openLegend(onOpen: () => void, onClose: () => void): void;
   notify(text: string, kind?: 'info' | 'success' | 'warn'): void;
   setPortalBanner(visible: boolean, text?: string): void;
   onAllKeysDelivered(): void;
   onLocationReached(): void;
+}
+
+interface InteractCandidate {
+  dist: number;
+  worldX: number;
+  worldY: number;
+  label: string;
+  run: () => void;
 }
 
 export class IslandQuestController {
@@ -26,7 +36,7 @@ export class IslandQuestController {
   private lastDoorOpen = false;
 
   constructor(
-    scene: Phaser.Scene,
+    private readonly scene: Phaser.Scene,
     private readonly bridge: GameBridge,
     private readonly movement: MovementSystem,
     private readonly ui: QuestUiHost,
@@ -45,24 +55,28 @@ export class IslandQuestController {
 
   destroy(): void {
     for (const off of this.unsubscribe) off();
-    this.ui.setAction(null, null);
-    this.ui.setHint(null);
+    this.ui.clearWorldUi();
   }
 
   tick(pos: Point): void {
-    if (this.modalBlocks || this.state.locationId !== 1) return;
-
-    this.ui.setHint(null);
+    if (this.modalBlocks || this.state.locationId !== 1) {
+      this.ui.clearWorldUi();
+      return;
+    }
 
     const slot = colorToSlot(this.bridge.self.color);
-    const distStone = Math.hypot(pos.x - ISLAND_QUEST.ancientStone.x, pos.y - ISLAND_QUEST.ancientStone.y);
+    const portal = ISLAND_QUEST.messagePortal;
+    const portalRadius = WORLD_CONFIG.portal.collisionRadius + 42;
     const door = ISLAND_QUEST.door;
-    const distDoor = Math.hypot(pos.x - door.x, pos.y - door.y);
 
-    let action: { label: string; run: () => void } | null = null;
+    const candidates: InteractCandidate[] = [];
 
-    if (distStone <= ISLAND_QUEST.interactRadius) {
-      action = {
+    const distPortal = Math.hypot(pos.x - portal.x, pos.y - portal.y);
+    if (distPortal <= portalRadius) {
+      candidates.push({
+        dist: distPortal,
+        worldX: portal.x,
+        worldY: portal.y,
         label: 'Исследовать',
         run: () => {
           this.ui.openLegend(
@@ -74,26 +88,34 @@ export class IslandQuestController {
             },
           );
         },
-      };
+      });
     }
 
     if (this.state.slots[slot] === 'map' && slot < this.state.activeSlots) {
-      const kp = ISLAND_QUEST.keys[slot];
-      if (Math.hypot(pos.x - kp.x, pos.y - kp.y) <= ISLAND_QUEST.keyPickupRadius) {
-        action = {
-          label: 'Подобрать ключ',
+      const kp = this.state.keyPositions[slot];
+      const dKey = Math.hypot(pos.x - kp.x, pos.y - kp.y);
+      if (dKey <= ISLAND_QUEST.keyPickupRadius) {
+        candidates.push({
+          dist: dKey,
+          worldX: kp.x,
+          worldY: kp.y,
+          label: 'Поднять ключ',
           run: () => this.pickKey(slot),
-        };
+        });
       }
     }
 
+    const distDoor = Math.hypot(pos.x - door.x, pos.y - door.y);
     if (distDoor <= door.interactRadius) {
       if (!this.state.doorOpen) {
         if (this.state.slots[slot] === 'held') {
-          action = {
+          candidates.push({
+            dist: distDoor,
+            worldX: door.x,
+            worldY: door.y,
             label: 'Вставить ключ',
             run: () => this.insertKey(slot),
-          };
+          });
         } else {
           const lines = [
             'Древняя дверь закрыта. Кажется, ей нужны ключи. Каждый из вас должен найти свой',
@@ -101,33 +123,42 @@ export class IslandQuestController {
           for (let i = 0; i < this.state.activeSlots; i += 1) {
             lines.push(slotPhaseLabel(KEY_COLOR_LABELS[i], this.state.slots[i]));
           }
-          this.ui.setHint(lines.join('\n'));
+          this.ui.setHintAtWorld(door.x, door.y, lines.join('\n'));
         }
       } else if (!this.state.portalReady[this.bridge.self.id]) {
-        action = {
-          label: 'Войти в портал',
+        candidates.push({
+          dist: distDoor,
+          worldX: door.x,
+          worldY: door.y,
+          label: 'Открыть',
           run: () => {
             this.bridge.questAcknowledgePortal();
             this.ui.notify('Вы готовы к переходу. Ждём остальных…', 'info');
           },
-        };
+        });
         this.ui.setPortalBanner(true, 'Портал открыт. Впереди вас ждёт новый мир');
       }
     } else if (!this.state.doorOpen) {
       this.ui.setPortalBanner(false);
     }
 
-    if (action) {
-      this.ui.setAction(action.label, () => {
-        action!.run();
-      });
+    candidates.sort((a, b) => a.dist - b.dist);
+    const best = candidates[0] ?? null;
+
+    if (best) {
+      this.ui.setActionAtWorld(best.worldX, best.worldY, best.label, best.run);
     } else {
-      this.ui.setAction(null, null);
+      this.ui.setActionAtWorld(0, 0, null, null);
+      if (distDoor > door.interactRadius) this.ui.setHintAtWorld(0, 0, null);
     }
 
-    if (this.movement.consumeInteractPress() && action) {
-      action.run();
+    if (this.movement.consumeInteractPress() && best) {
+      best.run();
     }
+  }
+
+  getScene(): Phaser.Scene {
+    return this.scene;
   }
 
   private pickKey(slot: number): void {
@@ -158,8 +189,7 @@ export class IslandQuestController {
     }
     if (state.locationId === 2) {
       this.ui.onLocationReached();
-      this.ui.setAction(null, null);
-      this.ui.setHint(null);
+      this.ui.clearWorldUi();
     }
     this.lastDoorOpen = state.doorOpen;
   }
@@ -180,8 +210,8 @@ export class IslandQuestController {
         avatar.setKeyFound(false);
         return;
       }
-      const slot = colorToSlot(player.color);
-      const phase = this.state.slots[slot];
+      const s = colorToSlot(player.color);
+      const phase = this.state.slots[s];
       avatar.setKeyFound(phase === 'held' || phase === 'inserted');
     };
 

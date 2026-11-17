@@ -333,37 +333,71 @@ export class PreloadScene extends Phaser.Scene {
   }
 
   private createQuestAssets(): void {
-    this.makeTexture(TEXTURES.questKey, 56, 72, (g) => {
-      g.fillStyle(0x000000, 0.3);
-      g.fillEllipse(28, 62, 40, 12);
-      g.fillStyle(PALETTE.glowGold, 1);
-      g.fillRoundedRect(22, 18, 12, 34, 4);
-      g.fillCircle(28, 16, 14);
-      g.lineStyle(2, 0x0b1511, 0.6);
-      g.strokeCircle(28, 16, 14);
-      g.lineStyle(2, PALETTE.glowGold, 0.9);
-      g.strokeRoundedRect(22, 18, 12, 34, 4);
+    this.makeTexture(TEXTURES.questKey, 88, 120, (g) => {
+      g.fillStyle(0x000000, 0.35);
+      g.fillEllipse(44, 108, 54, 16);
+      // стержень с зубцами
+      g.fillStyle(0x6a7a88, 1);
+      g.fillRoundedRect(38, 44, 12, 58, 3);
+      g.fillStyle(0x8fa0ad, 1);
+      g.fillRect(50, 52, 8, 6);
+      g.fillRect(50, 66, 10, 5);
+      g.fillRect(50, 78, 7, 5);
+      g.fillRect(50, 90, 9, 5);
+      // головка
+      g.fillStyle(0x5b6873, 1);
+      g.fillCircle(44, 34, 18);
+      g.fillStyle(0xa8b8c4, 1);
+      g.fillCircle(40, 30, 8);
+      g.lineStyle(2, 0x142018, 0.65);
+      g.strokeCircle(44, 34, 18);
+      // руны
+      g.lineStyle(2, PALETTE.glowCyan, 0.85);
+      g.lineBetween(36, 28, 44, 22);
+      g.lineBetween(44, 22, 52, 28);
+      g.lineBetween(38, 38, 50, 38);
+      g.lineStyle(1, PALETTE.glowGold, 0.7);
+      g.strokeCircle(44, 34, 12);
     });
 
-    this.makeTexture(TEXTURES.ancientDoor, 200, 240, (g) => {
-      g.fillStyle(0x000000, 0.32);
-      g.fillEllipse(100, 220, 170, 28);
-      g.fillStyle(PALETTE.stoneDark, 1);
-      g.fillRoundedRect(18, 30, 164, 188, 8);
-      g.fillStyle(PALETTE.stoneMid, 1);
-      g.fillRoundedRect(28, 40, 144, 168, 6);
-      g.lineStyle(5, PALETTE.stoneLight, 0.8);
-      g.strokeRoundedRect(28, 40, 144, 168, 6);
-      // углубления под ключи
-      const slots = [52, 82, 112, 142];
-      for (let i = 0; i < 4; i += 1) {
-        g.fillStyle(0x1a2420, 1);
-        g.fillCircle(slots[i], 124, 11);
-        g.lineStyle(2, PALETTE.stoneDark, 1);
-        g.strokeCircle(slots[i], 124, 11);
+    this.makeTexture(TEXTURES.ancientDoor, 280, 340, (g) => {
+      const w = 280;
+      const h = 340;
+      g.fillStyle(0x000000, 0.34);
+      g.fillEllipse(w / 2, h - 14, 200, 32);
+      // арка
+      g.fillStyle(0x3b4548, 1);
+      g.fillRoundedRect(24, 52, w - 48, h - 92, { tl: 36, tr: 36, bl: 10, br: 10 });
+      g.fillStyle(0x505d63, 1);
+      g.fillRoundedRect(38, 68, w - 76, h - 118, { tl: 28, tr: 28, bl: 8, br: 8 });
+      g.fillStyle(0x2f4a3d, 0.55);
+      g.fillRoundedRect(46, 76, w - 92, h - 136, 20);
+      // рама
+      g.lineStyle(8, 0x2a3234, 1);
+      g.strokeRoundedRect(28, 58, w - 56, h - 106, { tl: 32, tr: 32, bl: 8, br: 8 });
+      g.lineStyle(3, PALETTE.moss, 0.55);
+      g.strokeRoundedRect(40, 72, w - 80, h - 120, 18);
+      // орнамент
+      g.lineStyle(2, PALETTE.stoneLight, 0.55);
+      for (let i = 0; i < 5; i += 1) {
+        const y = 100 + i * 32;
+        g.lineBetween(60, y, w - 60, y);
       }
-      g.lineStyle(3, PALETTE.glowViolet, 0.5);
-      g.strokeRoundedRect(44, 64, 112, 112, 12);
+      g.lineStyle(2, PALETTE.glowViolet, 0.45);
+      g.strokeEllipse(w / 2, 168, 92, 120);
+      // углубления ключей
+      const slots = [92, 132, 172, 212];
+      for (let i = 0; i < 4; i += 1) {
+        g.fillStyle(0x141c18, 1);
+        g.fillCircle(slots[i], 188, 13);
+        g.lineStyle(2, 0x28312c, 1);
+        g.strokeCircle(slots[i], 188, 13);
+        g.lineStyle(1, PALETTE.glowCyan, 0.35);
+        g.strokeCircle(slots[i], 188, 9);
+      }
+      // внутреннее свечение
+      g.fillStyle(PALETTE.glowCyan, 0.08);
+      g.fillEllipse(w / 2, 175, 70, 90);
     });
   }
 

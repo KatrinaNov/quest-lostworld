@@ -1,22 +1,16 @@
 import type { Point } from '../../network/types';
+import { WORLD_CONFIG } from '../config/worldConfig';
 
 /** Параметры квеста локации 1 (не меняют генерацию леса). */
 export const ISLAND_QUEST = {
   interactRadius: 92,
   keyPickupRadius: 56,
 
-  ancientStone: { x: 1200, y: 655 } satisfies Point,
+  /** Центральный портал площадки — здесь легенда (тот же объект, что в WorldBuilder). */
+  messagePortal: { x: WORLD_CONFIG.portal.x, y: WORLD_CONFIG.portal.y } satisfies Point,
 
   /** Конец восточной тропы — древняя дверь. */
   door: { x: 2290, y: 800, interactRadius: 110 } satisfies Point & { interactRadius: number },
-
-  /** Слоты 0..3 = цвета APP_CONFIG.playerColors (красный, синий, зелёный, жёлтый). */
-  keys: [
-    { x: 165, y: 255 },
-    { x: 2235, y: 240 },
-    { x: 140, y: 1390 },
-    { x: 2260, y: 1410 },
-  ] satisfies readonly Point[],
 } as const;
 
 /** Подписи ключей на двери (соответствуют цветам персонажей). */
