@@ -60,7 +60,7 @@ export class TempleScene extends Phaser.Scene {
       this.bridge.on('position', ({ id, x, y }) => this.setRemoteTarget(id, x, y)),
       this.bridge.on('templeState', (state) => this.applyTempleState(state)),
     );
-    void this.bridge.templeStart().catch(() => this.notify('Не удалось загрузить состояние храма.', 'warn'));
+    void this.bridge.templeStart().catch(() => this.notify('Не удалось загрузить общий финал храма. Проверьте миграции Supabase.', 'warn'));
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.cleanup());
   }
 

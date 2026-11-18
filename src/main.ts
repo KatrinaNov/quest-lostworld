@@ -4,7 +4,7 @@ import { createGame, type GameHandle } from './game/createGame';
 import { WORLD_CONFIG } from './game/config/worldConfig';
 import { createRoom, joinRoom } from './network/roomService';
 import type { Point, RoomSession } from './network/types';
-import { enterFullscreen, isMobileDevice, isStandalone } from './ui/Fullscreen';
+import { enterFullscreen, isFullscreen, isMobileDevice, isStandalone } from './ui/Fullscreen';
 import type { QuestUiHost } from './game/quest/IslandQuestController';
 import { Hud } from './ui/Hud';
 import { LegendModal } from './ui/LegendModal';
@@ -61,6 +61,8 @@ class App {
   private knownPlayers = new Map<string, string>();
   private leaving = false;
   private notificationsShowingBanner = false;
+  private fullscreenBeforeSleep = false;
+  private restoreFullscreenOnTap = false;
 
   constructor() {
     this.lobby = new Lobby(this.uiRoot, {
@@ -98,12 +100,33 @@ class App {
     window.addEventListener('pagehide', () => {
       void this.room?.leave();
     });
+    // После сна Android/Chrome может сам выйти из Fullscreen API и показать URL-строку.
+    // Браузер разрешит вернуть fullscreen только по следующему касанию пользователя.
+    document.addEventListener('visibilitychange', this.onVisibilityChange);
+    window.addEventListener('pointerdown', this.restoreFullscreenAfterWake, { capture: true, passive: true });
   }
 
   private setMode(mode: 'lobby' | 'game'): void {
     this.appEl.classList.toggle('app--lobby', mode === 'lobby');
     this.appEl.classList.toggle('app--game', mode === 'game');
   }
+
+  private readonly onVisibilityChange = (): void => {
+    if (!isMobileDevice() || isStandalone()) return;
+    if (document.visibilityState === 'hidden') {
+      this.fullscreenBeforeSleep = isFullscreen();
+      return;
+    }
+    if (document.visibilityState === 'visible' && this.room && this.fullscreenBeforeSleep && !isFullscreen()) {
+      this.restoreFullscreenOnTap = true;
+    }
+  };
+
+  private readonly restoreFullscreenAfterWake = (): void => {
+    if (!this.restoreFullscreenOnTap) return;
+    this.restoreFullscreenOnTap = false;
+    if (this.room && isMobileDevice() && !isStandalone()) void enterFullscreen();
+  };
 
   private enterGame(room: RoomSession): void {
     this.room = room;
