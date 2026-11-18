@@ -27,6 +27,7 @@ export class TempleScene extends Phaser.Scene {
   private hud: TempleQuestHud | null = null;
   private readonly pendingStars = new Set<number>();
   private finalAnimating = false;
+  private finalRevealRequested = false;
   private hintShown = false;
   private doorButton: Phaser.GameObjects.Text | null = null;
 
@@ -209,7 +210,20 @@ export class TempleScene extends Phaser.Scene {
     this.time.delayedCall(3500, () => {
       layer.destroy(true);
       this.finalAnimating = false;
-      void this.bridge.templeRevealHint().catch(() => this.notify('Не удалось открыть послание.', 'warn'));
+      this.requestFinalReveal();
+    });
+  }
+  /** RPC идемпотентен: повтор закрывает редкий случай, когда realtime-обновление пришло раньше таймера анимации. */
+  private requestFinalReveal(): void {
+    if (this.finalRevealRequested || this.bridge.getTempleQuestState().phase !== 'final_started') return;
+    this.finalRevealRequested = true;
+    void this.bridge.templeRevealHint().then((result) => {
+      if (result === 'hint_ready') return;
+      this.finalRevealRequested = false;
+      if (this.bridge.getTempleQuestState().phase === 'final_started') this.time.delayedCall(1200, () => this.requestFinalReveal());
+    }).catch(() => {
+      this.finalRevealRequested = false;
+      this.time.delayedCall(1200, () => this.requestFinalReveal());
     });
   }
   private setupCamera(): void {
