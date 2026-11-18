@@ -1,5 +1,5 @@
 import type { ConnectionStatus, GameBridge, Player } from '../network/types';
-import { isFullscreenSupported, isMobileDevice, isStandalone, toggleFullscreen } from './Fullscreen';
+import { isFullscreenSupported, isMobileDevice, isStandalone } from './Fullscreen';
 import type { Notifications } from './Notifications';
 
 const LEAVE_CONFIRM_MS = 3000;
@@ -44,6 +44,7 @@ export class Hud {
     private readonly room: GameBridge,
     private readonly onLeave: () => void,
     private readonly notifications: Notifications,
+    toggleFullscreen: () => void,
   ) {
     this.root = document.createElement('div');
     this.root.className = 'hud';
@@ -78,7 +79,7 @@ export class Hud {
     const fsBtn = this.root.querySelector<HTMLButtonElement>('.hud-fs') as HTMLButtonElement;
     if (isFullscreenSupported() && !isStandalone() && isMobileDevice()) {
       fsBtn.hidden = false;
-      fsBtn.addEventListener('click', () => void toggleFullscreen());
+      fsBtn.addEventListener('click', toggleFullscreen);
     }
 
     codeBtn.addEventListener('click', () => void this.copyInvite());

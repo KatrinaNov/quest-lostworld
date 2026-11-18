@@ -13,9 +13,12 @@ export class PlatformerInput {
   }
 
   step(body: Phaser.Physics.Arcade.Body, deltaMs: number): void {
-    const grounded = body.blocked.down || body.touching.down;
+    const grounded = body.velocity.y >= 0 && (body.blocked.down || body.touching.down);
     this.coyoteLeft = grounded ? TEMPLE_CONFIG.coyoteMs : Math.max(0, this.coyoteLeft - deltaMs);
-    if (Phaser.Input.Keyboard.JustDown(this.keys.SPACE) || Phaser.Input.Keyboard.JustDown(this.keys.UP) || this.touch?.consumeJump()) this.jumpBufferLeft = TEMPLE_CONFIG.jumpBufferMs;
+    const touchJump = this.touch?.consumeJump();
+    const spaceJump = Phaser.Input.Keyboard.JustDown(this.keys.SPACE);
+    const arrowJump = Phaser.Input.Keyboard.JustDown(this.keys.UP);
+    if (touchJump || spaceJump || arrowJump) this.jumpBufferLeft = TEMPLE_CONFIG.jumpBufferMs;
     else this.jumpBufferLeft = Math.max(0, this.jumpBufferLeft - deltaMs);
     const horizontal = (this.keys.D.isDown || this.keys.RIGHT.isDown ? 1 : 0) - (this.keys.A.isDown || this.keys.LEFT.isDown ? 1 : 0) + (this.touch?.getHorizontal() ?? 0);
     body.setVelocityX(Phaser.Math.Clamp(horizontal, -1, 1) * TEMPLE_CONFIG.player.speed);

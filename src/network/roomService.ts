@@ -38,6 +38,19 @@ function validateCode(raw: string): string {
 
 type SpawnForSlot = ConnectOptions['spawnForSlot'];
 
+const RESUMABLE_ROOM_KEY = 'coopquest.activeRoom';
+
+export function getResumableRoomCode(): string | null {
+  try { return sessionStorage.getItem(RESUMABLE_ROOM_KEY); } catch { return null; }
+}
+
+export function rememberRoomCode(code: string | null): void {
+  try {
+    if (code) sessionStorage.setItem(RESUMABLE_ROOM_KEY, code);
+    else sessionStorage.removeItem(RESUMABLE_ROOM_KEY);
+  } catch { /* Ввод кода доступен вручную. */ }
+}
+
 /** Создание комнаты: генерируем код и подключаемся. Если код вдруг занят — пробуем другой. */
 export async function createRoom(rawName: string, spawnForSlot: SpawnForSlot): Promise<RealtimeRoom> {
   const name = validateName(rawName);
@@ -64,6 +77,6 @@ export async function joinRoom(rawName: string, rawCode: string, spawnForSlot: S
   const userId = await ensureAnonymousSession();
 
   const room = new RealtimeRoom(getSupabase(), userId, name, code);
-  await room.connect({ mode: 'join', spawnForSlot });
+  await room.connect({ mode: code === getResumableRoomCode() ? 'resume' : 'join', spawnForSlot });
   return room;
 }

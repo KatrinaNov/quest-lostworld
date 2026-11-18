@@ -1,3 +1,5 @@
+import { TEMPLE_CONFIG } from '../config/templeConfig';
+
 export interface TemplePlayerState {
   checkpoint: number;
   plateActive: boolean;
@@ -40,7 +42,10 @@ export function parseTempleQuestState(value: unknown): TempleQuestState | null {
     if (typeof state !== 'object' || state === null) continue;
     const row = state as Record<string, unknown>;
     if (typeof row.checkpoint !== 'number' || typeof row.plateActive !== 'boolean') continue;
-    players[id] = { checkpoint: Math.max(-1, Math.min(3, Math.floor(row.checkpoint))), plateActive: row.plateActive };
+    players[id] = {
+      checkpoint: Math.max(-1, Math.min(TEMPLE_CONFIG.checkpoints.length - 1, Math.floor(row.checkpoint))),
+      plateActive: row.plateActive,
+    };
   }
   const team: TempleTeamMember[] = [];
   if (Array.isArray(raw.team)) {

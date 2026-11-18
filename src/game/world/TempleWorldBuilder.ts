@@ -98,7 +98,7 @@ export function buildTempleWorld(scene: Phaser.Scene): BuiltTempleWorld {
   block(5090, 550, 140);
   block(5310, 480, 130); block(5530, 545, 142); block(5750, 500, 138);
   lavaChains.push(addLavaChain(scene, 5350, 530, 94, 5), addLavaChain(scene, 5750, 510, 72, -4));
-  // Чекпоинт остаётся на левой площадке; дальше — короткий провал и лестница.
+  // Площадка с чекпоинтом за первой парой цепей, перед коротким провалом.
   block(6140, 684, 500, 88);
   lavaPit(6480, 180);
 
@@ -169,9 +169,8 @@ export function buildTempleWorld(scene: Phaser.Scene): BuiltTempleWorld {
   scene.physics.add.existing(door, true);
   drawDoor(graphics, 13670, 548);
   const checkpoints = TEMPLE_CONFIG.checkpoints.map((point) => {
-    // Основание тонкого флагштока совпадает с верхом пола y=640.
-    const pole = scene.add.rectangle(point.x, 612, 4, 56, 0xd7dadd).setDepth(3);
-    const flag = scene.add.triangle(point.x + 13, 587, 0, 0, 17, 6, 0, 13, 0xf0b84b).setDepth(4);
+    const pole = scene.add.rectangle(point.x, TEMPLE_CONFIG.floorY - 28, 4, 56, 0xd7dadd).setDepth(3);
+    const flag = scene.add.triangle(point.x + 13, TEMPLE_CONFIG.floorY - 53, 0, 0, 17, 6, 0, 13, 0xf0b84b).setDepth(4);
     return { pole, flag };
   });
   return { solids, falling, lavaChains, lavaVisuals, lava, checkpoints, plates, stars, setPlateAssignments, door, openDoor: () => {

@@ -2,9 +2,9 @@ import './styles/main.css';
 import { isSupabaseConfigured } from './config/appConfig';
 import type { GameHandle } from './game/createGame';
 import { WORLD_CONFIG } from './game/config/worldConfig';
-import { createRoom, joinRoom } from './network/roomService';
+import { createRoom, getResumableRoomCode, joinRoom, rememberRoomCode } from './network/roomService';
 import type { Point, RoomSession } from './network/types';
-import { enterFullscreen, isFullscreen, isMobileDevice, isStandalone } from './ui/Fullscreen';
+import { enterFullscreen, isFullscreen, isFullscreenSupported, isMobileDevice, isStandalone, toggleFullscreen } from './ui/Fullscreen';
 import type { QuestUiHost } from './game/quest/IslandQuestController';
 import { Hud } from './ui/Hud';
 import { LegendModal } from './ui/LegendModal';
@@ -28,17 +28,11 @@ function spawnForSlot(slot: number): Point {
   return { x: p.x, y: p.y };
 }
 
-/**
- * На телефонах переходим в полноэкранный режим по нажатию «Создать» / «Подключиться»:
- * браузер разрешает это только из обработчика касания, поэтому вызываем до сетевых запросов.
- */
-function requestMobileFullscreen(): void {
-  if (isMobileDevice() && !isStandalone()) void enterFullscreen();
-}
-
 /** Публичный тестовый вход: пропускает путь до храма, но не подменяет комнату или Supabase. */
-function testLocation(): 'temple' | 'maze' | null {
-  const location = new URLSearchParams(window.location.search).get('test');
+function testLocation(): 'temple' | 'maze' | 'castle' | null {
+  const params = new URLSearchParams(window.location.search);
+  const location = params.get('test');
+  if (import.meta.env.DEV && location === 'castle' && params.get('demo') === '1') return location;
   return location === 'temple' || location === 'maze' ? location : null;
 }
 
@@ -65,20 +59,20 @@ class App {
   private knownPlayers = new Map<string, string>();
   private leaving = false;
   private notificationsShowingBanner = false;
-  private fullscreenBeforeSleep = false;
+  private wantsFullscreen = false;
   private restoreFullscreenOnTap = false;
 
   constructor() {
     this.lobby = new Lobby(this.uiRoot, {
       onCreate: async (name) => {
-        requestMobileFullscreen();
+        this.requestMobileFullscreen();
         const { createGame } = await import('./game/createGame');
         const room = await createRoom(name, spawnForSlot);
         this.enterGame(room, createGame);
         this.notifications.show(`Комната создана. Код: ${room.roomCode}`, 'success', 5000);
       },
       onJoin: async (name, code) => {
-        requestMobileFullscreen();
+        this.requestMobileFullscreen();
         const { createGame } = await import('./game/createGame');
         const room = await joinRoom(name, code, spawnForSlot);
         this.enterGame(room, createGame);
@@ -96,7 +90,10 @@ class App {
 
     if (import.meta.env.DEV && new URLSearchParams(window.location.search).get('demo') === '1') {
       void Promise.all([import('./dev/devPreview'), import('./dev/demoRoom'), import('./game/createGame')])
-        .then(([preview, demo, game]) => this.enterGame(new demo.DemoRoom('Тестер', preview.parseDevPreview()), game.createGame));
+        .then(([preview, demo, game]) => {
+          const options = preview.parseDevPreview();
+          this.enterGame(new demo.DemoRoom('Тестер', options), game.createGame, options ?? {});
+        });
     }
 
     window.addEventListener('pagehide', (event) => {
@@ -105,7 +102,9 @@ class App {
     // После сна Android/Chrome может сам выйти из Fullscreen API и показать URL-строку.
     // Браузер разрешит вернуть fullscreen только по следующему касанию пользователя.
     document.addEventListener('visibilitychange', this.onVisibilityChange);
-    window.addEventListener('pointerdown', this.restoreFullscreenAfterWake, { capture: true, passive: true });
+    window.addEventListener('pageshow', this.onVisibilityChange);
+    window.addEventListener('pointerup', this.restoreFullscreenAfterWake, { capture: true, passive: true });
+    window.addEventListener('click', this.restoreFullscreenAfterWake, { capture: true, passive: true });
   }
 
   private setMode(mode: 'lobby' | 'game'): void {
@@ -113,37 +112,52 @@ class App {
     this.appEl.classList.toggle('app--game', mode === 'game');
   }
 
-  private readonly onVisibilityChange = (): void => {
-    if (!isMobileDevice() || isStandalone()) return;
-    if (document.visibilityState === 'hidden') {
-      this.fullscreenBeforeSleep = isFullscreen();
-      return;
-    }
-    if (document.visibilityState === 'visible' && this.room && this.fullscreenBeforeSleep && !isFullscreen()) {
-      this.restoreFullscreenOnTap = true;
-    }
-  };
+  private requestMobileFullscreen(): void {
+    if (!isMobileDevice() || !isFullscreenSupported() || isStandalone()) return;
+    this.wantsFullscreen = true;
+    void enterFullscreen();
+  }
 
-  private readonly restoreFullscreenAfterWake = (): void => {
-    if (!this.restoreFullscreenOnTap) return;
+  private readonly toggleFullscreen = (): void => {
+    this.wantsFullscreen = !isFullscreen();
     this.restoreFullscreenOnTap = false;
-    if (this.room && isMobileDevice() && !isStandalone()) void enterFullscreen();
+    void toggleFullscreen();
   };
 
-  private enterGame(room: RoomSession, createGame: typeof import('./game/createGame').createGame): void {
+  private readonly onVisibilityChange = (): void => {
+    if (this.room && this.wantsFullscreen) this.restoreFullscreenOnTap = true;
+  };
+
+  private readonly restoreFullscreenAfterWake = (event: Event): void => {
+    if (!this.restoreFullscreenOnTap) return;
+    if (event.target instanceof Element && event.target.closest('.hud-fs, input, textarea, select')) return;
+    if (navigator.userActivation && !navigator.userActivation.isActive) return;
+    this.restoreFullscreenOnTap = false;
+    if (this.room && !isFullscreen() && !isStandalone()) void enterFullscreen();
+  };
+
+  private enterGame(room: RoomSession, createGame: typeof import('./game/createGame').createGame, demo?: { locationId?: number }): void {
     this.room = room;
     this.leaving = false;
-    const location = testLocation();
+    const resuming = !demo && getResumableRoomCode() === room.roomCode;
+    if (!demo) rememberRoomCode(room.roomCode);
+    if (demo) {
+      for (const stage of ['temple', 'maze', 'castle']) {
+        if (sessionStorage.getItem(`${stage}-room`) === room.roomCode) sessionStorage.removeItem(`${stage}-room`);
+      }
+    }
+    const location = resuming ? null : testLocation() ?? (demo?.locationId === 3 ? 'temple' : null);
     if (location) sessionStorage.setItem(`${location}-room`, room.roomCode);
-    if (location === 'temple' && sessionStorage.getItem('maze-room') === room.roomCode) {
-      sessionStorage.removeItem('maze-room');
+    if (location === 'temple' || location === 'maze') {
+      if (sessionStorage.getItem('castle-room') === room.roomCode) sessionStorage.removeItem('castle-room');
+      if (location === 'temple' && sessionStorage.getItem('maze-room') === room.roomCode) sessionStorage.removeItem('maze-room');
     }
     this.lobby.hide();
     this.setMode('game');
 
     this.knownPlayers = new Map(room.getPlayers().map((p) => [p.id, p.name]));
     this.controls = MobileControls.isNeeded() ? new MobileControls(this.uiRoot) : null;
-    this.hud = new Hud(this.uiRoot, room, () => void this.leave(), this.notifications);
+    this.hud = new Hud(this.uiRoot, room, () => void this.leave(), this.notifications, this.toggleFullscreen);
     this.legend = new LegendModal(this.uiRoot);
     this.questHud = new QuestHud(this.uiRoot);
     this.jungleHud = new JungleQuestHud(this.uiRoot);
@@ -223,6 +237,8 @@ class App {
 
     const room = this.room;
     this.room = null;
+    if (getResumableRoomCode() === room.roomCode) rememberRoomCode(null);
+    this.restoreFullscreenOnTap = false;
     for (const off of this.roomListeners) off();
     this.roomListeners = [];
 

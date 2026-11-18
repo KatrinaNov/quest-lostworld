@@ -12,16 +12,18 @@ export const TEMPLE_CONFIG = {
   player: { speed: 260, jumpVelocity: 600, width: 30, height: 38 },
   camera: { viewHeight: 430, viewWidth: 860, maxCssZoom: 1.45, followLerp: 0.14 },
   start: { x: 130, y: 560 } satisfies Point,
+  floorY: 640,
   checkpoints: [
     { x: 820, y: 560 },
     // Безопасный бастион прямо перед первыми огненными цепями.
     { x: 5010, y: 560 },
     { x: 6200, y: 560 },
     { x: 9400, y: 560 },
+    { x: 11240, y: 560 },
   ] satisfies readonly Point[],
   respawnDelayMs: 1000,
   coyoteMs: 110,
-  jumpBufferMs: 115,
+  jumpBufferMs: 165,
 } as const;
 
 export const TEMPLE_PALETTE = {

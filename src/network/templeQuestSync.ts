@@ -15,6 +15,7 @@ export class TempleQuestSync extends Emitter<TempleEvents> {
   constructor(private readonly client: SupabaseClient, private readonly roomCode: string, private readonly team: TempleTeamMember[]) { super(); }
   getState(): TempleQuestState { return this.state; }
   isReady(): boolean { return this.ready; }
+  async refresh(): Promise<void> { await this.act('sync'); }
   async start(): Promise<void> {
     await this.act('sync');
     this.channel = this.client.channel(`temple-quest:${this.roomCode}`).on('postgres_changes', { event: '*', schema: 'public', table: 'temple_quest_states', filter: `room_code=eq.${this.roomCode}` }, ({ new: row }) => this.ingest(row));

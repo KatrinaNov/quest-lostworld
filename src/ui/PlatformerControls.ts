@@ -5,6 +5,7 @@ export class PlatformerControls {
   private right = false;
   private jumpQueued = false;
   private readonly stops: Array<() => void> = [];
+  private readonly releaseButtons: Array<() => void> = [];
 
   constructor(parent: HTMLElement) {
     this.root = document.createElement('div');
@@ -14,11 +15,30 @@ export class PlatformerControls {
     this.bind('.platformer-btn--left', (active) => { this.left = active; });
     this.bind('.platformer-btn--right', (active) => { this.right = active; });
     this.bind('.platformer-btn--jump', (active) => { if (active) this.jumpQueued = true; });
+    window.addEventListener('blur', this.reset);
+    document.addEventListener('visibilitychange', this.onVisibility);
+    this.stops.push(() => {
+      window.removeEventListener('blur', this.reset);
+      document.removeEventListener('visibilitychange', this.onVisibility);
+    });
   }
 
   getHorizontal(): number { return (this.right ? 1 : 0) - (this.left ? 1 : 0); }
   consumeJump(): boolean { const value = this.jumpQueued; this.jumpQueued = false; return value; }
-  destroy(): void { for (const stop of this.stops) stop(); this.root.remove(); }
+  destroy(): void {
+    this.reset();
+    for (const stop of this.stops) stop();
+    this.root.remove();
+  }
+
+  private readonly reset = (): void => {
+    for (const release of this.releaseButtons) release();
+    this.jumpQueued = false;
+  };
+
+  private readonly onVisibility = (): void => {
+    if (document.hidden) this.reset();
+  };
 
   private bind(selector: string, set: (active: boolean) => void): void {
     const button = this.root.querySelector(selector) as HTMLButtonElement;
@@ -28,18 +48,21 @@ export class PlatformerControls {
       pointer = null; set(false); button.classList.remove('platformer-btn--held');
     };
     const start = (event: PointerEvent): void => {
-      event.preventDefault(); pointer = event.pointerId; button.setPointerCapture?.(event.pointerId);
+      if (pointer !== null || event.button !== 0) return;
+      event.preventDefault();
+      pointer = event.pointerId;
       set(true); button.classList.add('platformer-btn--held');
     };
+    this.releaseButtons.push(end);
     button.addEventListener('pointerdown', start);
-    button.addEventListener('pointerup', end);
-    button.addEventListener('pointercancel', end);
     button.addEventListener('lostpointercapture', end);
     window.addEventListener('pointerup', end);
+    window.addEventListener('pointercancel', end);
     this.stops.push(() => {
-      button.removeEventListener('pointerdown', start); button.removeEventListener('pointerup', end);
-      button.removeEventListener('pointercancel', end); button.removeEventListener('lostpointercapture', end);
+      button.removeEventListener('pointerdown', start);
+      button.removeEventListener('lostpointercapture', end);
       window.removeEventListener('pointerup', end);
+      window.removeEventListener('pointercancel', end);
     });
   }
 }

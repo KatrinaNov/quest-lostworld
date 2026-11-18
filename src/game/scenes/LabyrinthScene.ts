@@ -142,6 +142,8 @@ export class LabyrinthScene extends Phaser.Scene {
     if (state.completed && !this.completed) {
       this.completed = true;
       this.notify('ЛАБИРИНТ ПРОЙДЕН!', 'success');
+      this.scene.start(SCENE_KEYS.castle);
+      sessionStorage.setItem('castle-room', this.bridge.roomCode);
     }
   }
 

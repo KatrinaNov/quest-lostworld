@@ -1,7 +1,7 @@
 import { APP_CONFIG } from '../config/appConfig';
 import { GameError } from '../network/types';
 import { isIos, isStandalone } from './Fullscreen';
-import { normalizeRoomCode } from '../network/roomService';
+import { getResumableRoomCode, normalizeRoomCode } from '../network/roomService';
 
 export interface LobbyHandlers {
   onCreate(name: string): Promise<void>;
@@ -60,7 +60,7 @@ export class Lobby {
         </div>
         <p id="lobby-status" class="lobby-status" role="status" aria-live="polite"></p>
         <p id="lobby-hint" class="lobby-hint" hidden>
-          Чтобы убрать адресную строку на iPhone: «Поделиться» → «На экран “Домой”», затем запускайте игру с иконки.
+          Чтобы играть без адресной строки на iPhone, добавьте игру на экран «Домой» и открывайте её с иконки.
         </p>
       </div>
     `;
@@ -77,10 +77,17 @@ export class Lobby {
 
     this.nameInput.value = this.loadName();
     const invited = new URLSearchParams(window.location.search).get('room');
+    const lastRoom = getResumableRoomCode();
     if (invited) this.codeInput.value = normalizeRoomCode(invited).slice(0, APP_CONFIG.roomCodeLength);
+    else if (lastRoom) this.codeInput.value = lastRoom;
+    const updateJoinLabel = (): void => {
+      this.joinBtn.textContent = this.codeInput.value === getResumableRoomCode() ? 'Продолжить' : 'Подключиться';
+    };
+    updateJoinLabel();
 
     this.codeInput.addEventListener('input', () => {
       this.codeInput.value = normalizeRoomCode(this.codeInput.value);
+      updateJoinLabel();
     });
     this.nameInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') (this.codeInput.value ? this.joinBtn : this.createBtn).click();
@@ -98,6 +105,7 @@ export class Lobby {
 
   show(): void {
     this.screen.hidden = false;
+    this.joinBtn.textContent = 'Подключиться';
     this.setBusy(false);
   }
 

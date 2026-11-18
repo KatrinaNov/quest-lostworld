@@ -56,7 +56,7 @@ export type ConnectionStatus = 'connecting' | 'connected' | 'reconnecting' | 'di
  */
 export type RoomPhase = 'free_roam' | 'location_2';
 
-export type RoomMode = 'create' | 'join';
+export type RoomMode = 'create' | 'join' | 'resume';
 
 export type GameErrorCode =
   | 'config'
@@ -100,6 +100,7 @@ export interface RoomEvents {
   /** Серверное состояние плит и двери храма. */
   templeState: import('../game/quest/templeQuestTypes').TempleQuestState;
   mazeState: import('../game/quest/mazeQuestTypes').MazeQuestState;
+  castleState: import('../game/quest/castleQuestTypes').CastleQuestState;
   /** Сессию пришлось завершить (например, комната оказалась переполнена). */
   kicked: RoomLeaveReason;
 }
@@ -138,6 +139,10 @@ export interface GameBridge {
   mazeStart(): Promise<void>;
   mazeSaveCheckpoint(index: number): Promise<import('../game/quest/mazeQuestTypes').MazeResult>;
   mazeArrive(): Promise<import('../game/quest/mazeQuestTypes').MazeResult>;
+  getCastleQuestState(): import('../game/quest/castleQuestTypes').CastleQuestState;
+  isCastleQuestReady(): boolean;
+  castleStart(): Promise<void>;
+  castleAnswer(seal: number, answer: string): Promise<import('../game/quest/castleQuestTypes').CastleAnswerResult>;
 }
 
 /** Сессия комнаты для приложения: мост для игры + возможность выйти. */

@@ -13,6 +13,9 @@ import { JungleQuestSync } from './jungleQuestSync';
 import { TempleQuestSync } from './templeQuestSync';
 import { MazeQuestSync } from './mazeQuestSync';
 import { initialMazeQuestState } from '../game/quest/mazeQuestTypes';
+import { CastleQuestSync } from './castleQuestSync';
+import { initialCastleQuestState } from '../game/quest/castleQuestTypes';
+import type { IslandQuestState } from '../game/quest/islandQuestTypes';
 import { Emitter } from './emitter';
 import {
   GameError,
@@ -111,6 +114,9 @@ export class RealtimeRoom extends Emitter<RoomEvents> implements RoomSession {
   private templeStarting: Promise<void> | null = null;
   private mazeQuest: MazeQuestSync | null = null;
   private mazeStarting: Promise<void> | null = null;
+  private castleQuest: CastleQuestSync | null = null;
+  private castleStarting: Promise<void> | null = null;
+  private lastWake = -Infinity;
 
   constructor(
     private readonly client: SupabaseClient,
@@ -240,6 +246,31 @@ export class RealtimeRoom extends Emitter<RoomEvents> implements RoomSession {
   mazeSaveCheckpoint(index: number) { return this.mazeQuest?.checkpoint(index) ?? Promise.resolve('loading' as const); }
   mazeArrive() { return this.mazeQuest?.arrive() ?? Promise.resolve('loading' as const); }
 
+  getCastleQuestState() { return this.castleQuest?.getState() ?? initialCastleQuestState(); }
+  isCastleQuestReady(): boolean { return this.castleQuest?.isReady() ?? false; }
+
+  async castleStart(): Promise<void> {
+    if (this.closing || this.castleQuest?.isReady()) return;
+    if (this.castleStarting) return this.castleStarting;
+    const sync = new CastleQuestSync(this.client, this.roomCode);
+    this.castleQuest = sync;
+    sync.on('castleState', (state) => this.emit('castleState', state));
+    this.castleStarting = sync.start().then(() => {
+      if (this.closing) return;
+      void this.mazeQuest?.destroy();
+      this.mazeQuest = null;
+    }).catch(async (error: unknown) => {
+      if (this.castleQuest === sync) this.castleQuest = null;
+      await sync.destroy();
+      throw error;
+    }).finally(() => { this.castleStarting = null; });
+    return this.castleStarting;
+  }
+
+  castleAnswer(seal: number, answer: string) {
+    return this.castleQuest?.answer(seal, answer) ?? Promise.resolve('loading' as const);
+  }
+
   /**
    * Подключение к комнате с проверками:
    *  - create: комната с таким кодом не должна существовать;
@@ -285,7 +316,11 @@ export class RealtimeRoom extends Emitter<RoomEvents> implements RoomSession {
       const spawn = options.spawnForSlot(existing.length);
       this.self.x = spawn.x;
       this.self.y = spawn.y;
-      this.self.color = this.pickFreeColor(existing.map((p) => p.color));
+      const saved = options.mode === 'resume' ? this.readIslandSnapshot() : null;
+      const usedColors = existing.map((p) => p.color);
+      const savedColor = saved?.color;
+      this.self.color = typeof savedColor === 'number' && APP_CONFIG.playerColors.some((color) => color === savedColor) && !usedColors.includes(savedColor)
+        ? savedColor : this.pickFreeColor(usedColors);
       this.joinedAt = Math.max(Date.now(), ...existing.map((p) => p.joinedAt + 1));
 
       const tracked = await this.trackSelf(this.channel);
@@ -302,7 +337,7 @@ export class RealtimeRoom extends Emitter<RoomEvents> implements RoomSession {
 
       this.active = true;
       this.self.connected = true;
-      this.initQuestSync();
+      this.initQuestSync(saved?.state);
       this.applyPresence();
       this.setStatus('connected');
       if (existing.length > 0) this.quest?.requestFullState();
@@ -351,6 +386,8 @@ export class RealtimeRoom extends Emitter<RoomEvents> implements RoomSession {
     if (this.closing) return;
     this.closing = true;
     this.active = false;
+    void this.castleQuest?.destroy();
+    this.castleQuest = null;
     void this.mazeQuest?.destroy();
     this.mazeQuest = null;
     this.pendingSubscribe = null;
@@ -448,10 +485,7 @@ export class RealtimeRoom extends Emitter<RoomEvents> implements RoomSession {
     if (!this.active) return;
     this.setStatus('connected');
     this.flushPosition();
-    this.quest?.broadcastFullStateIfNeeded();
-    this.quest?.requestFullState();
-    void this.jungleQuest?.refresh().catch(() => undefined);
-    void this.mazeQuest?.refresh().catch(() => undefined);
+    this.refreshActiveQuest();
   }
 
   private scheduleReconnect(delay: number): void {
@@ -694,14 +728,27 @@ export class RealtimeRoom extends Emitter<RoomEvents> implements RoomSession {
 
   private readonly onVisibility = (): void => {
     if (document.visibilityState !== 'visible' || !this.active) return;
-    if (this.channel?.state !== REALTIME_CHANNEL_STATES.joined) this.rebuildNow();
+    const now = performance.now();
+    if (now - this.lastWake < 300) return;
+    this.lastWake = now;
+    if (this.channel?.state !== REALTIME_CHANNEL_STATES.joined || !this.client.realtime.isConnected()) this.rebuildNow();
+    else this.refreshActiveQuest();
   };
+
+  private refreshActiveQuest(): void {
+    const quest = this.castleQuest ?? this.mazeQuest ?? this.templeQuest ?? this.jungleQuest;
+    if (quest) void quest.refresh().catch(() => undefined);
+    else {
+      this.quest?.broadcastFullStateIfNeeded();
+      this.quest?.requestFullState();
+    }
+  }
 
   private defaultQuestState() {
     return createInitialQuestState(3, this.roomCode);
   }
 
-  private initQuestSync(): void {
+  private initQuestSync(saved?: IslandQuestState): void {
     this.destroyQuestSync();
     this.quest = new IslandQuestSync(
       this.self,
@@ -709,15 +756,34 @@ export class RealtimeRoom extends Emitter<RoomEvents> implements RoomSession {
       () => this.getPlayers(),
       (event) => this.sendGameEventRaw(event),
     );
+    if (saved) this.quest.ingestSync({ state: saved });
     this.questOff = this.quest.on('questState', (state) => {
+      this.rememberIslandState(state);
       // Квест джунглей нужен только во второй локации. Не создаём лишние RPC и
       // Postgres Realtime-канал, пока команда находится на острове с ключами.
       if (state.locationId === 2) this.initJungleQuestSync();
       this.emit('questState', state);
     });
     const initial = this.quest.getState();
+    this.rememberIslandState(initial);
     if (initial.locationId === 2) this.initJungleQuestSync();
     this.emit('questState', initial);
+  }
+
+  private get islandSnapshotKey(): string {
+    return `coopquest.island:${this.roomCode}:${this.self.id}`;
+  }
+
+  private readIslandSnapshot(): { state?: IslandQuestState; color?: number } | null {
+    try {
+      const saved = sessionStorage.getItem(this.islandSnapshotKey);
+      return saved ? JSON.parse(saved) : null;
+    } catch { return null; }
+  }
+
+  private rememberIslandState(state: IslandQuestState): void {
+    try { sessionStorage.setItem(this.islandSnapshotKey, JSON.stringify({ state, color: this.self.color })); }
+    catch { /* Состояние также приходит от участников комнаты. */ }
   }
 
   private initJungleQuestSync(): void {
@@ -754,11 +820,13 @@ export class RealtimeRoom extends Emitter<RoomEvents> implements RoomSession {
   private startBackgroundWork(): void {
     window.addEventListener('online', this.onOnline);
     document.addEventListener('visibilitychange', this.onVisibility);
+    window.addEventListener('pageshow', this.onVisibility);
   }
 
   private stopBackgroundWork(): void {
     window.removeEventListener('online', this.onOnline);
     document.removeEventListener('visibilitychange', this.onVisibility);
+    window.removeEventListener('pageshow', this.onVisibility);
     if (this.settleTimer !== null) clearTimeout(this.settleTimer);
     if (this.flushTimer !== null) clearTimeout(this.flushTimer);
     this.settleTimer = null;

@@ -10,6 +10,7 @@ import type {
 import { APP_CONFIG } from '../config/appConfig';
 import { minecraftSpawnForPlayer } from '../game/config/minecraftWorldConfig';
 import { WORLD_CONFIG } from '../game/config/worldConfig';
+import { TEMPLE_CONFIG } from '../game/config/templeConfig';
 import type { DevPreviewOptions } from './devPreview';
 import {
   initialJungleQuestState,
@@ -18,6 +19,7 @@ import {
 } from '../game/quest/jungleQuestTypes';
 import { initialTempleQuestState, type TempleQuestState } from '../game/quest/templeQuestTypes';
 import { initialMazeQuestState, type MazeQuestState } from '../game/quest/mazeQuestTypes';
+import { ALL_CASTLE_SEALS, initialCastleQuestState, isCastleSealOpen, type CastleAnswerResult } from '../game/quest/castleQuestTypes';
 
 /**
  * ТОЛЬКО ДЛЯ РАЗРАБОТКИ (npm run dev, адрес ?demo=1): локальная «комната» без Supabase
@@ -35,6 +37,7 @@ export class DemoRoom extends Emitter<RoomEvents> implements RoomSession {
   private jungleState: JungleQuestState = initialJungleQuestState();
   private templeState: TempleQuestState = initialTempleQuestState();
   private mazeState: MazeQuestState = initialMazeQuestState();
+  private castleState = initialCastleQuestState();
 
   constructor(name: string, preview: DevPreviewOptions | null = null) {
     super();
@@ -180,7 +183,9 @@ export class DemoRoom extends Emitter<RoomEvents> implements RoomSession {
     this.emit('templeState', this.templeState);
   }
   async templeSaveCheckpoint(index: number) {
-    const players = { ...this.templeState.players, [this.self.id]: { checkpoint: Math.max(-1, Math.min(3, index)), plateActive: this.templeState.players[this.self.id]?.plateActive ?? false } };
+    const previous = this.templeState.players[this.self.id];
+    const checkpoint = Math.max(previous?.checkpoint ?? -1, Math.min(TEMPLE_CONFIG.checkpoints.length - 1, index));
+    const players = { ...this.templeState.players, [this.self.id]: { checkpoint, plateActive: previous?.plateActive ?? false } };
     this.templeState = { ...this.templeState, revision: this.templeState.revision + 1, players };
     this.emit('templeState', this.templeState);
     return 'checkpoint_saved' as const;
@@ -218,6 +223,19 @@ export class DemoRoom extends Emitter<RoomEvents> implements RoomSession {
   async mazeStart(): Promise<void> { if (!this.mazeState.team.length) this.mazeState = { ...this.mazeState, team: [this.self.id] }; this.emit('mazeState', this.mazeState); }
   async mazeSaveCheckpoint(index: number) { const players = { ...this.mazeState.players, [this.self.id]: { checkpoint: Math.max(0, Math.min(2, index)), arrived: this.mazeState.players[this.self.id]?.arrived ?? false } }; this.mazeState = { ...this.mazeState, revision: this.mazeState.revision + 1, players }; this.emit('mazeState', this.mazeState); return 'checkpoint_saved' as const; }
   async mazeArrive() { const players = { ...this.mazeState.players, [this.self.id]: { checkpoint: this.mazeState.players[this.self.id]?.checkpoint ?? 0, arrived: true } }; this.mazeState = { ...this.mazeState, revision: this.mazeState.revision + 1, players, completed: true }; this.emit('mazeState', this.mazeState); return 'completed' as const; }
+
+  getCastleQuestState() { return this.castleState; }
+  isCastleQuestReady() { return true; }
+  async castleStart(): Promise<void> { this.emit('castleState', this.castleState); }
+  async castleAnswer(seal: number, answer: string): Promise<CastleAnswerResult> {
+    if (isCastleSealOpen(this.castleState, seal)) return 'already_open';
+    const expected = ['STONE,WATER,LEAF,FIRE', '6', '1,4,1', 'КРЫЛО'][seal];
+    if (answer.trim().toUpperCase() !== expected) return 'wrong';
+    const openedMask = this.castleState.openedMask | (1 << seal);
+    this.castleState = { openedMask, revision: this.castleState.revision + 1 };
+    this.emit('castleState', this.castleState);
+    return openedMask === ALL_CASTLE_SEALS ? 'completed' : 'opened';
+  }
 
   sendPosition(x: number, y: number): void {
     this.self.x = x;

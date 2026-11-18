@@ -12,9 +12,5 @@ export function parseDevPreview(): DevPreviewOptions | null {
   const raw = (params.get('loc') ?? params.get('location') ?? '1').toLowerCase();
   const locationId: 1 | 2 | 3 = raw === '3' || raw === 'temple' ? 3 : raw === '2' || raw === 'minecraft' || raw === 'mc' ? 2 : 1;
 
-  if (locationId === 3) {
-    sessionStorage.setItem('temple-room', 'DEMO42');
-  }
-
   return { locationId };
 }

@@ -33,6 +33,7 @@ export class TempleScene extends Phaser.Scene {
   private hintShown = false;
   private questHud: QuestHud | null = null;
   private transitionQueued = false;
+  private transitionRequested = false;
 
   constructor() { super(SCENE_KEYS.temple); }
 
@@ -45,6 +46,7 @@ export class TempleScene extends Phaser.Scene {
     this.cameras.main.setBackgroundColor('#07080d');
     const parent = document.getElementById('ui-root');
     this.touch = parent ? new PlatformerControls(parent) : null;
+    this.events.once(Phaser.Scenes.Events.DESTROY, this.destroyTouch, this);
     this.hud = this.registry.get(REGISTRY_KEYS.templeHud) as TempleQuestHud | null;
     (this.registry.get(REGISTRY_KEYS.virtualInput) as { setEnabled?: (enabled: boolean) => void } | undefined)?.setEnabled?.(false);
     this.world = buildTempleWorld(this);
@@ -94,7 +96,8 @@ export class TempleScene extends Phaser.Scene {
     if (this.player.y > TEMPLE_CONFIG.height + 60 || this.world.lava.some((zone) => Phaser.Geom.Intersects.RectangleToRectangle(bounds, zone)) || this.world.lavaChains.some((chain) => chain.hits(bounds))) this.respawn();
   }
   private checkCheckpoints(): void {
-    for (let i = this.checkpoint + 1; i < TEMPLE_CONFIG.checkpoints.length; i += 1) {
+    if (this.respawning || !this.playerBody.blocked.down || Math.abs(this.playerBody.bottom - TEMPLE_CONFIG.floorY) > 2) return;
+    for (let i = TEMPLE_CONFIG.checkpoints.length - 1; i > this.checkpoint; i -= 1) {
       const point = TEMPLE_CONFIG.checkpoints[i]; if (this.player.x < point.x - 22) continue;
       this.checkpoint = i; this.world.checkpoints[i].flag.setFillStyle(0x71c94d);
       void this.bridge.templeSaveCheckpoint(i).catch(() => this.notify('Не удалось сохранить чекпоинт.', 'warn'));
@@ -106,8 +109,8 @@ export class TempleScene extends Phaser.Scene {
     this.respawning = true; this.playerBody.setVelocity(0, 0).setEnable(false); this.player.setVisible(false);
     this.time.delayedCall(TEMPLE_CONFIG.respawnDelayMs, () => {
       const point = this.checkpoint >= 0 ? TEMPLE_CONFIG.checkpoints[this.checkpoint] : TEMPLE_CONFIG.start;
-      this.player.setPosition(point.x, point.y).setVisible(true);
-      this.playerBody.setEnable(true).setVelocity(0, 0); this.respawning = false;
+      this.playerBody.setEnable(true).reset(point.x, point.y);
+      this.player.setVisible(true); this.respawning = false;
     });
   }
   private checkPlate(): void {
@@ -141,11 +144,7 @@ export class TempleScene extends Phaser.Scene {
   }
   private applyTempleState(state: TempleQuestState): void {
     if (state.phase === 'transitioned') {
-      if (!this.transitionQueued) {
-        this.transitionQueued = true;
-        sessionStorage.setItem('maze-room', this.bridge.roomCode);
-        this.scene.start(SCENE_KEYS.labyrinth);
-      }
+      this.enterLabyrinth();
       return;
     }
     this.world.setPlateAssignments(state.team);
@@ -154,7 +153,7 @@ export class TempleScene extends Phaser.Scene {
     if (self && self.checkpoint > this.checkpoint) {
       this.checkpoint = self.checkpoint;
       const point = TEMPLE_CONFIG.checkpoints[this.checkpoint];
-      this.player.setPosition(point.x, point.y); this.playerBody.setVelocity(0, 0);
+      this.playerBody.reset(point.x, point.y);
       this.world.checkpoints[this.checkpoint].flag.setFillStyle(0x71c94d);
     }
     for (const star of this.world.stars) {
@@ -176,16 +175,39 @@ export class TempleScene extends Phaser.Scene {
   private updateDoorButton(): void {
     const ready = this.bridge.getTempleQuestState().phase === 'hint_ready';
     const near = Math.abs(this.player.x - 13670) < 110 && Math.abs(this.player.y - 560) < 150;
-    const visible = ready && near && !this.respawning && !this.finalAnimating && !this.hud?.isOpen();
+    const visible = ready && near && !this.respawning && !this.finalAnimating && !this.transitionRequested && !this.hud?.isOpen();
     this.questHud?.setActionAtWorld(13670, 548, visible ? 'Войти' : null, visible ? this.openDoorDialog : null);
   }
   private readonly openDoorDialog = (): void => {
     if (this.bridge.getTempleQuestState().phase !== 'hint_ready' || this.hud?.isOpen()) return;
     this.hud?.showDoorConfirm(
       () => this.hud?.showHint(() => undefined),
-      () => void this.bridge.templeTransition().catch(() => this.notify('Не удалось перейти дальше.', 'warn')),
+      () => void this.confirmTransition(),
     );
   };
+  private async confirmTransition(): Promise<void> {
+    if (this.transitionRequested || this.transitionQueued) return;
+    this.transitionRequested = true;
+    try {
+      const result = await this.bridge.templeTransition();
+      if (!this.sys.isActive()) return;
+      if (result === 'transitioned' || this.bridge.getTempleQuestState().phase === 'transitioned') {
+        this.enterLabyrinth();
+      } else {
+        this.notify('Переход ещё не подтверждён. Нажмите «Войти» ещё раз.', 'warn');
+      }
+    } catch {
+      if (!this.transitionQueued) this.notify('Не удалось перейти дальше. Попробуйте ещё раз.', 'warn');
+    } finally {
+      this.transitionRequested = false;
+    }
+  }
+  private enterLabyrinth(): void {
+    if (this.transitionQueued) return;
+    this.transitionQueued = true;
+    this.scene.start(SCENE_KEYS.labyrinth);
+    sessionStorage.setItem('maze-room', this.bridge.roomCode);
+  }
   private runFinalAnimation(): void {
     if (this.finalAnimationPlayed || this.bridge.getTempleQuestState().phase !== 'final_started') return;
     this.finalAnimationPlayed = true;
@@ -250,10 +272,16 @@ export class TempleScene extends Phaser.Scene {
     for (const [id, remote] of this.remotes) if (!seen.has(id)) { remote.destroy(); this.remotes.delete(id); }
   }
   private setRemoteTarget(id: string, x: number, y: number): void { this.remotes.get(id)?.setTarget(x, y); }
+  private destroyTouch(): void {
+    this.touch?.destroy();
+    this.touch = null;
+  }
   private cleanup(): void {
     if (!this.bridge.getTempleQuestState().doorOpen && this.plateActive) void this.bridge.templeSetPlate(false);
     for (const stop of this.off) stop(); this.off = [];
-    this.platformInput.destroy(); this.touch?.destroy(); this.touch = null;
+    this.platformInput.destroy();
+    this.events.off(Phaser.Scenes.Events.DESTROY, this.destroyTouch, this);
+    this.destroyTouch();
     (this.registry.get(REGISTRY_KEYS.virtualInput) as { setEnabled?: (enabled: boolean) => void } | undefined)?.setEnabled?.(true);
     for (const falling of this.world.falling) falling.destroy();
     for (const chain of this.world.lavaChains) chain.destroy();

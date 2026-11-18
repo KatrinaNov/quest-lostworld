@@ -792,6 +792,9 @@ input {
   inset: 0;
   z-index: 58;
   display: none;
+}
+
+#ui-root > .platformer-controls {
   pointer-events: none;
 }
 
@@ -849,6 +852,54 @@ input {
   .temple-progress-row { min-height: 17px; font-size: 10px; }
   .temple-progress-row b { font-size: 11px; }
 }
+
+.castle-progress {
+  position: absolute;
+  top: calc(var(--sat) + 10px);
+  left: 50%;
+  z-index: 17;
+  transform: translateX(-50%);
+  padding: 6px 12px;
+  border: 1px solid #8a644f;
+  border-radius: 10px;
+  background: rgba(36, 27, 38, 0.94);
+  color: #f5dda7;
+  font-size: 12px;
+  text-align: center;
+}
+
+.castle-progress > div { display: flex; justify-content: center; gap: 5px; margin-top: 3px; }
+.castle-ward { width: 20px; border: 1px solid #735968; border-radius: 4px; color: #c2a7b7; }
+.castle-ward--open { background: #775135; border-color: #f0c980; color: #fff0b6; }
+.castle-progress button { margin-left: 8px; min-height: 38px; color: #2e211c; background: #f5dda7; border: 0; border-radius: 6px; }
+.castle-modal { --legend-width: 560px; }
+.castle-modal .legend-body { margin-bottom: 12px; }
+.castle-form { width: 100%; text-align: center; }
+.castle-elements, .castle-fields { display: flex; justify-content: center; gap: 7px; }
+
+.castle-elements button, .castle-fields :is(input, select), .castle-order-row button {
+  min-height: 44px;
+  border: 1px solid #ab8855;
+  border-radius: 8px;
+  background: #faf0d7;
+  color: #342820;
+  font-family: inherit;
+  font-size: 16px;
+}
+
+.castle-elements button { min-width: 0; flex: 1; padding: 5px 2px; }
+.castle-elements button span { display: block; font-size: 20px; }
+.castle-elements button[aria-pressed='true'] { background: #315843; border-color: #315843; color: #fff1c8; }
+.castle-order-row { display: flex; justify-content: space-between; align-items: center; gap: 7px; margin: 5px 0; }
+.castle-order-row output { font-size: 14px; }
+.castle-order-row button { min-height: 38px; padding-inline: 8px; }
+.castle-fields { margin-block: 8px; }
+.castle-fields label { display: grid; gap: 4px; justify-items: center; }
+.castle-fields select { min-width: 69px; padding-inline: 7px; }
+.castle-fields input { width: min(230px, 60vw); padding-inline: 9px; }
+.castle-feedback { margin-block: 5px; color: #862c29; font-size: 15px; }
+.castle-form .legend-start:disabled { opacity: 0.58; cursor: default; }
+.castle-gift { margin-block: 12px 0; padding: 9px; border: 1px solid #ae8553; border-radius: 8px; background: #fff0c6; }
 
 /* ============ Уведомления ============ */
 .toast-box {

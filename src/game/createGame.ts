@@ -8,6 +8,7 @@ import { BootScene } from './scenes/BootScene';
 import { MinecraftScene } from './scenes/MinecraftScene';
 import { TempleScene } from './scenes/TempleScene';
 import { LabyrinthScene } from './scenes/LabyrinthScene';
+import { CastleScene } from './scenes/CastleScene';
 import { PreloadScene } from './scenes/PreloadScene';
 import { REGISTRY_KEYS, WorldScene } from './scenes/WorldScene';
 import type { VirtualInput } from './systems/MovementSystem';
@@ -47,7 +48,7 @@ export function createGame(
     height: initial.h,
     backgroundColor: '#0b1511',
     scale: { mode: Phaser.Scale.NONE },
-    scene: [BootScene, PreloadScene, WorldScene, MinecraftScene, TempleScene, LabyrinthScene],
+    scene: [BootScene, PreloadScene, WorldScene, MinecraftScene, TempleScene, LabyrinthScene, CastleScene],
     banner: false,
     disableContextMenu: true,
     render: { antialias: true, roundPixels: true },
@@ -81,6 +82,9 @@ export function createGame(
   const resize = (): void => {
     if (frame === 0) frame = requestAnimationFrame(applySize);
   };
+  const resizeOnWake = (): void => {
+    if (document.visibilityState === 'visible') resize();
+  };
   // После поворота экрана браузеры иногда сообщают итоговый размер с задержкой.
   const resizeSoonAfterRotation = (): void => {
     resize();
@@ -91,7 +95,9 @@ export function createGame(
   observer.observe(parent);
   window.addEventListener('resize', resize);
   window.addEventListener('orientationchange', resizeSoonAfterRotation);
+  window.addEventListener('pageshow', resizeOnWake);
   window.visualViewport?.addEventListener('resize', resize);
+  document.addEventListener('visibilitychange', resizeOnWake);
   document.addEventListener('fullscreenchange', resize);
 
   return {
@@ -101,7 +107,9 @@ export function createGame(
       observer.disconnect();
       window.removeEventListener('resize', resize);
       window.removeEventListener('orientationchange', resizeSoonAfterRotation);
+      window.removeEventListener('pageshow', resizeOnWake);
       window.visualViewport?.removeEventListener('resize', resize);
+      document.removeEventListener('visibilitychange', resizeOnWake);
       document.removeEventListener('fullscreenchange', resize);
       // Phaser удаляет холст на следующем кадре, который может не наступить после сбоя.
       game.canvas?.remove();
