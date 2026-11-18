@@ -17,6 +17,8 @@ export interface IslandQuestState {
   ];
   /** Сколько слотов ключей активно (3 или 4). */
   activeSlots: number;
+  /** Первый игрок прочитал послание и открыл ключи для команды. */
+  adventureStarted: boolean;
   slots: [KeyPhase, KeyPhase, KeyPhase, KeyPhase];
   /** Кто держит ключ (slot → playerId), только при held. */
   heldBy: [string | null, string | null, string | null, string | null];
@@ -28,6 +30,7 @@ export interface IslandQuestState {
 
 export type QuestEventType =
   | 'quest_sync'
+  | 'quest_request_sync'
   | 'quest_pick'
   | 'quest_insert'
   | 'quest_portal_ack';

@@ -71,7 +71,8 @@ export class IslandQuestWorld {
     }
   }
 
-  applyState(state: IslandQuestState, showKeys: boolean): void {
+  applyState(state: IslandQuestState): void {
+    const showKeys = state.adventureStarted;
     if (showKeys && !this.floatStarted) {
       this.floatStarted = true;
       for (let i = 0; i < this.keys.length; i += 1) {

@@ -116,6 +116,7 @@ export interface GameBridge {
   getQuestState(): import('../game/quest/islandQuestTypes').IslandQuestState;
   on<K extends keyof RoomEvents>(event: K, listener: (data: RoomEvents[K]) => void): () => void;
   sendPosition(x: number, y: number): void;
+  questStartAdventure(): void;
   questPickKey(slot: number): 'ok' | 'wrong_color' | 'taken' | 'slot';
   questInsertKey(slot: number): 'ok' | 'wrong_color' | 'no_key' | 'slot';
   questAcknowledgePortal(): void;

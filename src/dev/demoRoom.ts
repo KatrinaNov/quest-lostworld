@@ -111,6 +111,10 @@ export class DemoRoom extends Emitter<RoomEvents> implements RoomSession {
     return this.quest.getState();
   }
 
+  questStartAdventure(): void {
+    this.quest.startAdventure();
+  }
+
   questPickKey(slot: number) {
     return this.quest.pickKey(slot);
   }

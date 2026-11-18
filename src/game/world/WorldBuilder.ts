@@ -85,7 +85,7 @@ function addGrass(scene: Phaser.Scene): void {
  */
 function bakeGround(scene: Phaser.Scene, layers: Phaser.GameObjects.Graphics[]): void {
   const { width, height, bakeScale } = WORLD_CONFIG;
-  const maxSide = 4096; // безопасный предел размера текстуры на мобильных GPU
+  const maxSide = scene.renderer.type === Phaser.CANVAS ? 2048 : 4096;
   const scale = Math.min(bakeScale, maxSide / width, maxSide / height);
 
   const texture = scene.add

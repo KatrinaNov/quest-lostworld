@@ -16,14 +16,9 @@ export interface GameHandle {
   destroy(): void;
 }
 
-/** Ограничиваем плотность пикселей: чёткая картинка на телефонах без лишней нагрузки на GPU. */
-function pixelRatio(): number {
-  return Math.min(window.devicePixelRatio || 1, 2);
-}
-
 /**
- * Создаёт игру Phaser внутри parent. Размер холста = размер контейнера × pixelRatio,
- * CSS растягивает его на весь контейнер.
+ * Мобильный Canvas обходится без WebGL-контекста, который браузер может потерять
+ * при сворачивании страницы или нехватке видеопамяти.
  */
 export function createGame(
   parent: HTMLElement,
@@ -35,8 +30,9 @@ export function createGame(
   templeHud: TempleQuestHud | null = null,
   notifications: { show: (text: string, kind?: 'info' | 'success' | 'warn') => void } | null = null,
 ): GameHandle {
+  const mobile = virtualInput !== null;
   const size = (): { w: number; h: number } => {
-    const ratio = pixelRatio();
+    const ratio = Math.min(window.devicePixelRatio || 1, mobile ? 1 : 2);
     return {
       w: Math.max(1, Math.round(parent.clientWidth * ratio)),
       h: Math.max(1, Math.round(parent.clientHeight * ratio)),
@@ -45,7 +41,7 @@ export function createGame(
   const initial = size();
 
   const game = new Phaser.Game({
-    type: Phaser.AUTO,
+    type: mobile ? Phaser.CANVAS : Phaser.AUTO,
     parent,
     width: initial.w,
     height: initial.h,
@@ -107,6 +103,8 @@ export function createGame(
       window.removeEventListener('orientationchange', resizeSoonAfterRotation);
       window.visualViewport?.removeEventListener('resize', resize);
       document.removeEventListener('fullscreenchange', resize);
+      // Phaser удаляет холст на следующем кадре, который может не наступить после сбоя.
+      game.canvas?.remove();
       game.destroy(true);
     },
   };

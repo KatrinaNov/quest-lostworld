@@ -33,8 +33,6 @@ export class IslandQuestController {
   private readonly world: IslandQuestWorld;
   private state: IslandQuestState;
   private readonly unsubscribe: Array<() => void> = [];
-  private readonly adventureStorageKey: string;
-  private adventureStarted: boolean;
   private modalBlocks = false;
   private lastDoorOpen = false;
 
@@ -48,8 +46,6 @@ export class IslandQuestController {
   ) {
     this.world = new IslandQuestWorld(scene);
     this.state = bridge.getQuestState();
-    this.adventureStorageKey = `quest-lostworld-island-started:${bridge.roomCode}`;
-    this.adventureStarted = sessionStorage.getItem(this.adventureStorageKey) === '1';
 
     this.unsubscribe.push(
       this.bridge.on('questState', (st) => this.onState(st)),
@@ -83,11 +79,11 @@ export class IslandQuestController {
         dist: distPortal,
         worldX: portal.x,
         worldY: portal.y,
-        label: this.adventureStarted ? 'Исследовать' : 'Прочитать послание',
+        label: this.state.adventureStarted ? 'Исследовать' : 'Прочитать послание',
         run: () => {
           this.modalBlocks = true;
           this.ui.openLegend(
-            () => this.startAdventure(),
+            () => this.bridge.questStartAdventure(),
             () => {
               this.modalBlocks = false;
             },
@@ -96,7 +92,7 @@ export class IslandQuestController {
       });
     }
 
-    if (this.adventureStarted && this.state.slots[slot] === 'map' && slot < this.state.activeSlots) {
+    if (this.state.adventureStarted && this.state.slots[slot] === 'map' && slot < this.state.activeSlots) {
       const kp = this.state.keyPositions[slot];
       const dKey = Math.hypot(pos.x - kp.x, pos.y - kp.y);
       if (dKey <= ISLAND_QUEST.keyPickupRadius) {
@@ -122,7 +118,7 @@ export class IslandQuestController {
             run: () => this.insertKey(slot),
           });
         } else {
-          if (this.adventureStarted) {
+          if (this.state.adventureStarted) {
             const lines = ['Древняя дверь закрыта. Каждый из вас должен принести свой ключ.'];
             for (let i = 0; i < this.state.activeSlots; i += 1) {
               lines.push(slotPhaseLabel(KEY_COLOR_LABELS[i], this.state.slots[i]));
@@ -168,15 +164,8 @@ export class IslandQuestController {
     return this.scene;
   }
 
-  private startAdventure(): void {
-    if (this.adventureStarted) return;
-    this.adventureStarted = true;
-    sessionStorage.setItem(this.adventureStorageKey, '1');
-    this.applyState(this.state);
-  }
-
   private pickKey(slot: number): void {
-    if (!this.adventureStarted || this.modalBlocks) return;
+    if (!this.state.adventureStarted || this.modalBlocks) return;
     const res = this.bridge.questPickKey(slot);
     if (res === 'wrong_color') {
       this.ui.notify('Этот ключ предназначен другому игроку', 'warn');
@@ -211,7 +200,7 @@ export class IslandQuestController {
 
   private applyState(state: IslandQuestState): void {
     this.state = state;
-    this.world.applyState(state, this.adventureStarted);
+    this.world.applyState(state);
     this.refreshKeyIndicators();
   }
 
@@ -227,7 +216,7 @@ export class IslandQuestController {
       }
       const s = colorToSlot(player.color);
       const phase = this.state.slots[s];
-      avatar.setKeyFound(this.adventureStarted && (phase === 'held' || phase === 'inserted'));
+      avatar.setKeyFound(this.state.adventureStarted && (phase === 'held' || phase === 'inserted'));
     };
 
     mark(this.getLocal());

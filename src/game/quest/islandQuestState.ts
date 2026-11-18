@@ -11,6 +11,7 @@ export function createInitialQuestState(activeSlots: number, roomCode: string): 
     layoutSeed: hashRoomCode(roomCode),
     keyPositions,
     activeSlots: n,
+    adventureStarted: false,
     slots: ['map', 'map', 'map', 'map'],
     heldBy: [null, null, null, null],
     doorOpen: false,
@@ -51,8 +52,22 @@ export function mergeQuestState(
   current: IslandQuestState,
   incoming: IslandQuestState,
 ): IslandQuestState {
-  if (incoming.rev < current.rev) return current;
-  return cloneState(incoming);
+  const incomingStarted = incoming.adventureStarted === true ||
+    incoming.locationId === 2 || incoming.doorOpen || incoming.slots.some((phase) => phase !== 'map');
+
+  if (incoming.rev <= current.rev || (current.adventureStarted && !incomingStarted)) {
+    return incomingStarted && !current.adventureStarted ? { ...current, adventureStarted: true } : current;
+  }
+
+  const next = cloneState(incoming);
+  next.adventureStarted = incomingStarted;
+  if (!next.doorOpen) next.activeSlots = Math.max(current.activeSlots, next.activeSlots);
+  return next;
+}
+
+export function tryStartAdventure(state: IslandQuestState): IslandQuestState | null {
+  if (state.adventureStarted || state.locationId !== 1) return null;
+  return { ...state, adventureStarted: true, rev: state.rev + 1 };
 }
 
 export type QuestApplyResult =
@@ -65,7 +80,7 @@ export function tryPickKey(
   slot: number,
 ): QuestApplyResult {
   if (state.doorOpen || state.locationId !== 1) return { ok: false, reason: 'done' };
-  if (slot < 0 || slot >= state.activeSlots) return { ok: false, reason: 'slot' };
+  if (!state.adventureStarted || slot < 0 || slot >= state.activeSlots) return { ok: false, reason: 'slot' };
   if (state.slots[slot] !== 'map') return { ok: false, reason: 'taken' };
   if (colorToSlot(player.color) !== slot) return { ok: false, reason: 'wrong_color' };
 

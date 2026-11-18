@@ -87,6 +87,8 @@ export class WorldScene extends Phaser.Scene {
   }
 
   override update(time: number, delta: number): void {
+    // При входе в комнату, уже прошедшую остров, create ставит переход в очередь.
+    if (!this.local) return;
     // Реальное время между кадрами. Параметр delta Phaser сглаживает, из-за чего при просадках FPS
     // персонаж двигался бы медленнее, чем 220 единиц в секунду.
     const elapsed = this.lastFrameTime > 0 ? time - this.lastFrameTime : delta;

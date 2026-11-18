@@ -145,6 +145,10 @@ export class RealtimeRoom extends Emitter<RoomEvents> implements RoomSession {
     return this.quest?.getState() ?? this.defaultQuestState();
   }
 
+  questStartAdventure(): void {
+    this.quest?.startAdventure();
+  }
+
   questPickKey(slot: number) {
     return this.quest?.pickKey(slot) ?? 'slot';
   }
@@ -301,6 +305,7 @@ export class RealtimeRoom extends Emitter<RoomEvents> implements RoomSession {
       this.initQuestSync();
       this.applyPresence();
       this.setStatus('connected');
+      if (existing.length > 0) this.quest?.requestFullState();
       this.startBackgroundWork();
     } catch (err) {
       await this.leave();
@@ -444,6 +449,7 @@ export class RealtimeRoom extends Emitter<RoomEvents> implements RoomSession {
     this.setStatus('connected');
     this.flushPosition();
     this.quest?.broadcastFullStateIfNeeded();
+    this.quest?.requestFullState();
     void this.jungleQuest?.refresh().catch(() => undefined);
     void this.mazeQuest?.refresh().catch(() => undefined);
   }
@@ -604,13 +610,14 @@ export class RealtimeRoom extends Emitter<RoomEvents> implements RoomSession {
       this.emit('players', this.getPlayers());
     }
 
+    this.quest?.onPlayersChanged();
+
     // Появился новый игрок: один раз сообщаем ему свою актуальную позицию
     // (в Presence записана только позиция на момент входа). Это заменяет периодическую рассылку.
     if (newcomer) {
       this.flushPosition(true);
       this.quest?.broadcastFullStateIfNeeded();
     }
-    this.quest?.onPlayersChanged();
   }
 
   private kick(reason: RoomLeaveReason): void {

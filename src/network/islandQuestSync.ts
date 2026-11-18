@@ -7,8 +7,9 @@ import {
   tryInsertKey,
   tryPickKey,
   tryPortalAck,
+  tryStartAdventure,
 } from '../game/quest/islandQuestState';
-import type { IslandQuestState, QuestSyncPayload } from '../game/quest/islandQuestTypes';
+import type { IslandQuestState, QuestEventType, QuestSyncPayload } from '../game/quest/islandQuestTypes';
 import type { GameEvent, Player, RoomEvents } from './types';
 
 type QuestEvents = Pick<RoomEvents, 'questState'>;
@@ -43,6 +44,7 @@ export class IslandQuestSync extends Emitter<QuestEvents> {
     const next: IslandQuestState = {
       ...this.state,
       locationId,
+      adventureStarted: locationId === 2 || this.state.adventureStarted,
       doorOpen: locationId === 2 ? true : this.state.doorOpen,
       rev: this.state.rev + 1,
       keyPositions: this.state.keyPositions.map((p) => ({ x: p.x, y: p.y })) as IslandQuestState['keyPositions'],
@@ -73,9 +75,9 @@ export class IslandQuestSync extends Emitter<QuestEvents> {
   ingestSync(payload: unknown): void {
     if (typeof payload !== 'object' || payload === null || !('state' in payload)) return;
     const st = (payload as QuestSyncPayload).state;
-    if (!st || typeof st.rev !== 'number' || !st.keyPositions) return;
+    if (!st || typeof st.rev !== 'number' || !st.keyPositions || !Array.isArray(st.slots)) return;
     const merged = mergeQuestState(this.state, st);
-    if (merged.rev !== this.state.rev) this.applyLocal(merged);
+    if (merged !== this.state) this.applyLocal(merged);
   }
 
   ingestRemoteEvent(event: GameEvent): void {
@@ -84,6 +86,9 @@ export class IslandQuestSync extends Emitter<QuestEvents> {
       return;
     }
     switch (event.type) {
+      case 'quest_request_sync':
+        this.broadcastFullState();
+        break;
       case 'quest_pick': {
         const slot = (event.payload as { slot?: number })?.slot;
         if (typeof slot !== 'number') return;
@@ -113,6 +118,17 @@ export class IslandQuestSync extends Emitter<QuestEvents> {
       default:
         break;
     }
+  }
+
+  startAdventure(): void {
+    const next = tryStartAdventure(this.state);
+    if (!next) return;
+    this.applyLocal(next);
+    this.broadcastFullState();
+  }
+
+  requestFullState(): void {
+    this.emitRemote('quest_request_sync', {});
   }
 
   pickKey(slot: number): 'ok' | 'wrong_color' | 'taken' | 'slot' {
@@ -166,7 +182,7 @@ export class IslandQuestSync extends Emitter<QuestEvents> {
     this.emit('questState', state);
   }
 
-  private emitRemote(type: string, payload: unknown): void {
+  private emitRemote(type: QuestEventType, payload: unknown): void {
     this.sendRemote({ type, from: this.self.id, payload, t: Date.now() });
   }
 }
