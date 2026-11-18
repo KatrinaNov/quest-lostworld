@@ -2,9 +2,12 @@ import Phaser from 'phaser';
 import type { QuestUiHost } from './quest/IslandQuestController';
 import type { QuestHud } from '../ui/QuestHud';
 import type { JungleQuestHud } from '../ui/JungleQuestHud';
+import type { TempleQuestHud } from '../ui/TempleQuestHud';
 import type { GameBridge } from '../network/types';
 import { BootScene } from './scenes/BootScene';
 import { MinecraftScene } from './scenes/MinecraftScene';
+import { TempleScene } from './scenes/TempleScene';
+import { LabyrinthScene } from './scenes/LabyrinthScene';
 import { PreloadScene } from './scenes/PreloadScene';
 import { REGISTRY_KEYS, WorldScene } from './scenes/WorldScene';
 import type { VirtualInput } from './systems/MovementSystem';
@@ -30,6 +33,7 @@ export function createGame(
   questHud: QuestHud | null = null,
   locationIntro: { openMinecraft: () => void } | null = null,
   jungleHud: JungleQuestHud | null = null,
+  templeHud: TempleQuestHud | null = null,
   notifications: { show: (text: string, kind?: 'info' | 'success' | 'warn') => void } | null = null,
 ): GameHandle {
   const size = (): { w: number; h: number } => {
@@ -48,11 +52,13 @@ export function createGame(
     height: initial.h,
     backgroundColor: '#0b1511',
     scale: { mode: Phaser.Scale.NONE },
-    scene: [BootScene, PreloadScene, WorldScene, MinecraftScene],
+    scene: [BootScene, PreloadScene, WorldScene, MinecraftScene, TempleScene, LabyrinthScene],
     banner: false,
     disableContextMenu: true,
     render: { antialias: true, roundPixels: true },
     input: { keyboard: true, mouse: false, touch: false, gamepad: false },
+    // Нужна только TempleScene; остальные сцены по-прежнему используют собственную top-down коллизию.
+    physics: { default: 'arcade', arcade: { gravity: { x: 0, y: 0 }, debug: false } },
     callbacks: {
       preBoot: (g) => {
         g.registry.set(REGISTRY_KEYS.bridge, bridge);
@@ -61,6 +67,7 @@ export function createGame(
         g.registry.set(REGISTRY_KEYS.questHud, questHud);
         g.registry.set(REGISTRY_KEYS.locationIntro, locationIntro);
         g.registry.set(REGISTRY_KEYS.jungleHud, jungleHud);
+        g.registry.set(REGISTRY_KEYS.templeHud, templeHud);
         g.registry.set(REGISTRY_KEYS.notifications, notifications);
       },
     },

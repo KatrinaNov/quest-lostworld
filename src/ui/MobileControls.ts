@@ -29,6 +29,12 @@ export class MobileControls implements VirtualInput {
   private vector: Point = { x: 0, y: 0 };
   private center: Point = { x: 0, y: 0 };
 
+  /** Сцена храма временно заменяет джойстик своими тремя кнопками. */
+  setEnabled(enabled: boolean): void {
+    this.reset();
+    this.zone.hidden = !enabled;
+  }
+
   private readonly onResetEvent = (): void => this.reset();
   private readonly onVisibility = (): void => {
     if (document.visibilityState !== 'visible') this.reset();

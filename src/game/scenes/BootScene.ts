@@ -5,6 +5,8 @@ export const SCENE_KEYS = {
   preload: 'PreloadScene',
   world: 'WorldScene',
   minecraft: 'MinecraftScene',
+  temple: 'TempleScene',
+  labyrinth: 'LabyrinthScene',
 } as const;
 
 /** Первичная настройка и переход к загрузке ресурсов. */

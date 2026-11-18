@@ -14,6 +14,7 @@ import { MobileControls } from './ui/MobileControls';
 import { Notifications } from './ui/Notifications';
 import { QuestHud } from './ui/QuestHud';
 import { JungleQuestHud } from './ui/JungleQuestHud';
+import { TempleQuestHud } from './ui/TempleQuestHud';
 
 function requireById(id: string): HTMLElement {
   const el = document.getElementById(id);
@@ -55,6 +56,7 @@ class App {
   private questHud: QuestHud | null = null;
   private locationIntro: LocationIntroModal | null = null;
   private jungleHud: JungleQuestHud | null = null;
+  private templeHud: TempleQuestHud | null = null;
   private roomListeners: Array<() => void> = [];
   private knownPlayers = new Map<string, string>();
   private leaving = false;
@@ -115,6 +117,7 @@ class App {
     this.legend = new LegendModal(this.uiRoot);
     this.questHud = new QuestHud(this.uiRoot);
     this.jungleHud = new JungleQuestHud(this.uiRoot);
+    this.templeHud = new TempleQuestHud(this.uiRoot);
     this.locationIntro = new LocationIntroModal(this.uiRoot);
 
     const questUi: QuestUiHost = {
@@ -146,6 +149,7 @@ class App {
       this.questHud,
       this.locationIntro,
       this.jungleHud,
+      this.templeHud,
       this.notifications,
     );
 
@@ -210,6 +214,8 @@ class App {
     this.locationIntro = null;
     this.jungleHud?.destroy();
     this.jungleHud = null;
+    this.templeHud?.destroy();
+    this.templeHud = null;
     this.notifications.setBanner(null);
 
     this.setMode('lobby');

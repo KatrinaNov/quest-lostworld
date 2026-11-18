@@ -757,6 +757,70 @@ input {
   box-shadow: 0 0 18px rgba(110, 231, 255, 0.7);
 }
 
+/* ============ Храм испытаний: кнопки платформера ============ */
+.platformer-controls {
+  position: absolute;
+  inset: 0;
+  z-index: 58;
+  display: none;
+  pointer-events: none;
+}
+
+.platformer-btn {
+  position: absolute;
+  bottom: calc(var(--sab) + 18px);
+  width: 66px;
+  height: 66px;
+  padding: 0;
+  border: 2px solid rgba(232, 241, 228, 0.5);
+  border-radius: 50%;
+  color: #fff5dc;
+  background: rgba(16, 26, 29, 0.83);
+  box-shadow: 0 5px 18px rgba(0, 0, 0, 0.45), inset 0 0 14px rgba(127, 225, 208, 0.12);
+  font-size: 25px;
+  pointer-events: auto;
+  touch-action: none;
+}
+.platformer-btn--left { left: calc(var(--sal) + 18px); }
+.platformer-btn--right { left: calc(var(--sal) + 94px); }
+.platformer-btn--jump { right: calc(var(--sar) + 26px); border-color: rgba(255, 209, 90, 0.72); }
+.platformer-btn--held { transform: scale(0.93); filter: brightness(1.28); }
+@media (pointer: coarse) {
+  .platformer-controls { display: block; }
+}
+
+/* ============ Храм испытаний: звёзды и финал ============ */
+.temple-progress {
+  position: absolute;
+  top: calc(var(--sat) + 58px);
+  left: calc(var(--sal) + 12px);
+  z-index: 18;
+  min-width: 180px;
+  padding: 7px 9px;
+  color: #fff5dc;
+  background: rgba(7, 8, 13, 0.84);
+  border: 1px solid rgba(210, 214, 215, 0.38);
+  border-radius: 8px;
+  box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.3);
+  font-family: monospace;
+  pointer-events: none;
+}
+.temple-progress-row { display: grid; grid-template-columns: 9px minmax(54px, 1fr) auto 25px; gap: 6px; align-items: center; min-height: 21px; font-size: 11px; }
+.temple-progress-row i { width: 8px; height: 8px; border: 1px solid #0b0d11; }
+.temple-progress-row span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.temple-progress-row b { letter-spacing: 1px; font-size: 13px; color: #59606a; }
+.temple-star-icon--on { color: #ffe06b; text-shadow: 1px 1px #a84c15; }
+.temple-progress-row em { color: #cdd4dc; font-style: normal; text-align: right; }
+.temple-modal { width: min(440px, calc(100vw - 30px)); border-color: rgba(255, 224, 107, 0.52); }
+.temple-dialog-actions { display: flex; gap: 9px; }
+.temple-dialog-actions .legend-start { flex: 1; }
+@media (max-height: 480px) {
+  .temple-progress { top: calc(var(--sat) + 48px); left: calc(var(--sal) + 7px); padding: 4px 6px; }
+  .temple-progress-row { min-height: 17px; font-size: 10px; }
+  .temple-progress-row b { font-size: 11px; }
+  .temple-modal .legend-body { max-height: 42vh; overflow: auto; }
+}
+
 /* ============ Уведомления ============ */
 .toast-box {
   position: absolute;

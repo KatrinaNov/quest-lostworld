@@ -7,8 +7,10 @@ import {
 import { APP_CONFIG } from '../config/appConfig';
 import { createInitialQuestState } from '../game/quest/islandQuestState';
 import { initialJungleQuestState } from '../game/quest/jungleQuestTypes';
+import { initialTempleQuestState } from '../game/quest/templeQuestTypes';
 import { IslandQuestSync } from './islandQuestSync';
 import { JungleQuestSync } from './jungleQuestSync';
+import { TempleQuestSync } from './templeQuestSync';
 import { Emitter } from './emitter';
 import {
   GameError,
@@ -102,6 +104,9 @@ export class RealtimeRoom extends Emitter<RoomEvents> implements RoomSession {
   private questOff: (() => void) | null = null;
   private jungleQuest: JungleQuestSync | null = null;
   private jungleOff: (() => void) | null = null;
+  private templeQuest: TempleQuestSync | null = null;
+  private templeOff: (() => void) | null = null;
+  private templeStarting: Promise<void> | null = null;
 
   constructor(
     private readonly client: SupabaseClient,
@@ -166,6 +171,43 @@ export class RealtimeRoom extends Emitter<RoomEvents> implements RoomSession {
 
   jungleSubmitSecret(secret: string) {
     return this.jungleQuest?.submitSecret(secret) ?? Promise.resolve('loading' as const);
+  }
+
+  getTempleQuestState() {
+    return this.templeQuest?.getState() ?? initialTempleQuestState();
+  }
+
+  isTempleQuestReady(): boolean { return this.templeQuest?.isReady() ?? false; }
+
+  async templeStart(): Promise<void> {
+    if (this.templeQuest?.isReady()) return;
+    if (this.templeStarting) return this.templeStarting;
+    const team = this.getPlayers().map(({ id, name, color }) => ({ id, name, color }));
+    const sync = new TempleQuestSync(this.client, this.roomCode, team);
+    this.templeQuest = sync;
+    this.templeOff = sync.on('templeState', (state) => this.emit('templeState', state));
+    this.templeStarting = sync.start().then(() => { if (this.templeQuest === sync) this.emit('templeState', sync.getState()); }).finally(() => { this.templeStarting = null; });
+    return this.templeStarting;
+  }
+
+  templeSaveCheckpoint(index: number) {
+    return this.templeQuest?.checkpoint(index) ?? Promise.resolve('loading' as const);
+  }
+
+  templeSetPlate(active: boolean) {
+    return this.templeQuest?.setPlate(active) ?? Promise.resolve('loading' as const);
+  }
+
+  templeCollectStar(index: number) {
+    return this.templeQuest?.collectStar(index) ?? Promise.resolve('loading' as const);
+  }
+
+  templeRevealHint() {
+    return this.templeQuest?.revealHint() ?? Promise.resolve('loading' as const);
+  }
+
+  templeTransition() {
+    return this.templeQuest?.transition() ?? Promise.resolve('loading' as const);
   }
 
   /**
@@ -295,6 +337,7 @@ export class RealtimeRoom extends Emitter<RoomEvents> implements RoomSession {
     }
     this.destroyQuestSync();
     void this.destroyJungleQuestSync();
+    void this.destroyTempleQuestSync();
     this.setStatus('disconnected');
     this.clearListeners();
   }
@@ -656,6 +699,13 @@ export class RealtimeRoom extends Emitter<RoomEvents> implements RoomSession {
     this.jungleOff = null;
     const sync = this.jungleQuest;
     this.jungleQuest = null;
+    if (sync) await sync.destroy();
+  }
+
+  private async destroyTempleQuestSync(): Promise<void> {
+    this.templeOff?.(); this.templeOff = null;
+    const sync = this.templeQuest;
+    this.templeQuest = null; this.templeStarting = null;
     if (sync) await sync.destroy();
   }
 

@@ -6,6 +6,7 @@ import { WORLD_BOUNDS, WORLD_CONFIG, type Obstacle } from '../config/worldConfig
 export interface VirtualInput {
   getVector(): Point;
   reset(): void;
+  setEnabled?(enabled: boolean): void;
 }
 
 type KeyMap = Record<

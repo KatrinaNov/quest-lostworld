@@ -97,6 +97,8 @@ export interface RoomEvents {
   questState: import('../game/quest/islandQuestTypes').IslandQuestState;
   /** Серверное состояние интерактива второй локации. */
   jungleState: import('../game/quest/jungleQuestTypes').JungleQuestState;
+  /** Серверное состояние плит и двери храма. */
+  templeState: import('../game/quest/templeQuestTypes').TempleQuestState;
   /** Сессию пришлось завершить (например, комната оказалась переполнена). */
   kicked: RoomLeaveReason;
 }
@@ -121,6 +123,14 @@ export interface GameBridge {
   jungleClaimSymbol(symbol: import('../game/quest/jungleQuestTypes').JungleSymbolId): Promise<import('../game/quest/jungleQuestTypes').JungleQuestActionResult>;
   jungleAcknowledgeMessage(): Promise<import('../game/quest/jungleQuestTypes').JungleQuestActionResult>;
   jungleSubmitSecret(secret: string): Promise<import('../game/quest/jungleQuestTypes').JungleQuestActionResult>;
+  getTempleQuestState(): import('../game/quest/templeQuestTypes').TempleQuestState;
+  isTempleQuestReady(): boolean;
+  templeStart(): Promise<void>;
+  templeSaveCheckpoint(index: number): Promise<import('../game/quest/templeQuestTypes').TempleQuestActionResult>;
+  templeSetPlate(active: boolean): Promise<import('../game/quest/templeQuestTypes').TempleQuestActionResult>;
+  templeCollectStar(index: number): Promise<import('../game/quest/templeQuestTypes').TempleQuestActionResult>;
+  templeRevealHint(): Promise<import('../game/quest/templeQuestTypes').TempleQuestActionResult>;
+  templeTransition(): Promise<import('../game/quest/templeQuestTypes').TempleQuestActionResult>;
 }
 
 /** Сессия комнаты для приложения: мост для игры + возможность выйти. */

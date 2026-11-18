@@ -36,6 +36,10 @@ export class MinecraftScene extends Phaser.Scene {
   create(): void {
     this.cameras.main.setBackgroundColor('#6dae5a');
     this.bridge = this.registry.get(REGISTRY_KEYS.bridge) as GameBridge;
+    if (sessionStorage.getItem('temple-room') === this.bridge.roomCode) {
+      this.scene.start(SCENE_KEYS.temple);
+      return;
+    }
     const virtualInput = (this.registry.get(REGISTRY_KEYS.virtualInput) as VirtualInput | undefined) ?? null;
 
     const built = buildMinecraftWorld(this);
@@ -79,6 +83,10 @@ export class MinecraftScene extends Phaser.Scene {
         showJungleSecret: (onSubmit) => jungleHud.showSecret(onSubmit),
         showJungleTempleOpen: (onClose) => jungleHud.showTempleOpen(onClose),
         closeJungleModal: () => jungleHud.close(),
+        enterTemple: () => {
+          sessionStorage.setItem('temple-room', this.bridge.roomCode);
+          this.scene.start(SCENE_KEYS.temple);
+        },
       };
       this.jungleQuest = new JungleQuestController(this.bridge, this.movement, jungleUi, built.openTemplePassage);
     }

@@ -16,6 +16,7 @@ import {
   type JungleQuestState,
   type JungleSymbolId,
 } from '../game/quest/jungleQuestTypes';
+import { initialTempleQuestState, type TempleQuestState } from '../game/quest/templeQuestTypes';
 
 /**
  * ТОЛЬКО ДЛЯ РАЗРАБОТКИ (npm run dev, адрес ?demo=1): локальная «комната» без Supabase
@@ -31,6 +32,7 @@ export class DemoRoom extends Emitter<RoomEvents> implements RoomSession {
   private readonly quest: IslandQuestSync;
   private readonly questOff: () => void;
   private jungleState: JungleQuestState = initialJungleQuestState();
+  private templeState: TempleQuestState = initialTempleQuestState();
 
   constructor(name: string, preview: DevPreviewOptions | null = null) {
     super();
@@ -67,7 +69,7 @@ export class DemoRoom extends Emitter<RoomEvents> implements RoomSession {
     );
     this.questOff = this.quest.on('questState', (state) => this.emit('questState', state));
 
-    if (preview?.locationId === 2) {
+    if (preview?.locationId === 2 || preview?.locationId === 3) {
       this.quest.devJumpToLocation(2);
       const spawn = minecraftSpawnForPlayer(this.getPlayers(), this.self.id);
       this.self.x = spawn.x;
@@ -82,14 +84,14 @@ export class DemoRoom extends Emitter<RoomEvents> implements RoomSession {
 
     // Боты обновляют позицию 10 раз в секунду, как настоящие игроки.
     const roamCenter =
-      preview?.locationId === 2 ? { x: this.self.x, y: this.self.y } : { x: 1200, y: 800 };
+      preview?.locationId === 2 || preview?.locationId === 3 ? { x: this.self.x, y: this.self.y } : { x: 1200, y: 800 };
     this.timer = window.setInterval(() => {
       this.t += 0.1;
       const [, a, b] = this.players;
-      a.x = roamCenter.x + Math.cos(this.t * 0.7) * (preview?.locationId === 2 ? 160 : 420);
-      a.y = roamCenter.y + Math.sin(this.t * 0.7) * (preview?.locationId === 2 ? 120 : 300);
-      b.x = roamCenter.x + Math.cos(-this.t * 0.5 + 2) * (preview?.locationId === 2 ? 200 : 600);
-      b.y = roamCenter.y + Math.sin(-this.t * 0.5 + 2) * (preview?.locationId === 2 ? 140 : 380);
+      a.x = roamCenter.x + Math.cos(this.t * 0.7) * (preview?.locationId === 2 || preview?.locationId === 3 ? 160 : 420);
+      a.y = roamCenter.y + Math.sin(this.t * 0.7) * (preview?.locationId === 2 || preview?.locationId === 3 ? 120 : 300);
+      b.x = roamCenter.x + Math.cos(-this.t * 0.5 + 2) * (preview?.locationId === 2 || preview?.locationId === 3 ? 200 : 600);
+      b.y = roamCenter.y + Math.sin(-this.t * 0.5 + 2) * (preview?.locationId === 2 || preview?.locationId === 3 ? 140 : 380);
       this.emit('position', { id: a.id, x: a.x, y: a.y });
       this.emit('position', { id: b.id, x: b.x, y: b.y });
     }, 100);
@@ -160,6 +162,50 @@ export class DemoRoom extends Emitter<RoomEvents> implements RoomSession {
     this.jungleState = { ...this.jungleState, revision: this.jungleState.revision + 1, phase: 'temple_open' };
     this.emit('jungleState', this.jungleState);
     return 'opened' as const;
+  }
+
+  getTempleQuestState(): TempleQuestState { return this.templeState; }
+  isTempleQuestReady(): boolean { return true; }
+  async templeStart(): Promise<void> {
+    // В preview оставляем одного участника, чтобы финал можно было пройти без ботов.
+    if (this.templeState.team.length === 0) {
+      this.templeState = { ...this.templeState, revision: this.templeState.revision + 1, team: [{ id: this.self.id, name: this.self.name, color: this.self.color }] };
+    }
+    this.emit('templeState', this.templeState);
+  }
+  async templeSaveCheckpoint(index: number) {
+    const players = { ...this.templeState.players, [this.self.id]: { checkpoint: Math.max(-1, Math.min(3, index)), plateActive: this.templeState.players[this.self.id]?.plateActive ?? false } };
+    this.templeState = { ...this.templeState, revision: this.templeState.revision + 1, players };
+    this.emit('templeState', this.templeState);
+    return 'checkpoint_saved' as const;
+  }
+  async templeSetPlate(active: boolean) {
+    const players = { ...this.templeState.players, [this.self.id]: { checkpoint: this.templeState.players[this.self.id]?.checkpoint ?? -1, plateActive: active } };
+    const ownStars = this.templeState.stars[this.self.id]?.length ?? 0;
+    const finalStarted = this.templeState.phase === 'collecting' && active && ownStars === 3;
+    this.templeState = { ...this.templeState, revision: this.templeState.revision + 1, players, phase: finalStarted ? 'final_started' : this.templeState.phase };
+    this.emit('templeState', this.templeState);
+    return finalStarted ? 'final_started' as const : 'plate_updated' as const;
+  }
+  async templeCollectStar(index: number) {
+    if (this.templeState.phase !== 'collecting' || index < 0 || index > 2) return 'ignored' as const;
+    const previous = this.templeState.stars[this.self.id] ?? [];
+    if (previous.includes(index)) return 'ignored' as const;
+    this.templeState = { ...this.templeState, revision: this.templeState.revision + 1, stars: { ...this.templeState.stars, [this.self.id]: [...previous, index] } };
+    this.emit('templeState', this.templeState);
+    return 'star_collected' as const;
+  }
+  async templeRevealHint() {
+    if (this.templeState.phase !== 'final_started') return 'ignored' as const;
+    this.templeState = { ...this.templeState, revision: this.templeState.revision + 1, phase: 'hint_ready', doorOpen: true };
+    this.emit('templeState', this.templeState);
+    return 'hint_ready' as const;
+  }
+  async templeTransition() {
+    if (this.templeState.phase !== 'hint_ready') return 'ignored' as const;
+    this.templeState = { ...this.templeState, revision: this.templeState.revision + 1, phase: 'transitioned' };
+    this.emit('templeState', this.templeState);
+    return 'transitioned' as const;
   }
 
   sendPosition(x: number, y: number): void {

@@ -12,6 +12,7 @@ export interface JungleQuestUiHost {
   showJungleSecret(onSubmit: (value: string) => Promise<'wrong' | 'opened' | 'ignored'>): void;
   showJungleTempleOpen(onClose: () => void): void;
   closeJungleModal(): void;
+  enterTemple(): void;
 }
 
 interface Candidate {
@@ -55,7 +56,7 @@ export class JungleQuestController {
       const distance = Math.hypot(position.x - JUNGLE_TEMPLE.x, position.y - JUNGLE_TEMPLE.y);
       if (distance <= JUNGLE_TEMPLE.interactRadius) {
         this.ui.setActionAtWorld(JUNGLE_TEMPLE.x, JUNGLE_TEMPLE.y, 'Войти в храм', () => {
-          this.ui.notify('Путь в храм открыт. Следующий мир ждёт вас!', 'success');
+          this.ui.enterTemple();
         });
       } else this.ui.setActionAtWorld(0, 0, null, null);
       return;
