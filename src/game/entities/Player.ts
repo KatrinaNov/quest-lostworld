@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import type { Player } from '../../network/types';
-import { TEXTURES } from '../scenes/PreloadScene';
+import { QUEST_KEY_FRAME, TEXTURES } from '../scenes/PreloadScene';
 import { PALETTE, WORLD_CONFIG } from '../config/worldConfig';
 
 interface PositionSample {
@@ -82,7 +82,7 @@ export class PlayerAvatar extends Phaser.GameObjects.Container {
       .setOrigin(0.5, 1);
 
     this.keyBadge = scene.textures.exists(TEXTURES.questKeyOrange)
-      ? scene.add.image(22, -42, TEXTURES.questKeyOrange).setScale(0.07).setVisible(false).setDepth(9999)
+      ? scene.add.image(22, -42, TEXTURES.questKeyOrange, QUEST_KEY_FRAME).setScale(0.07).setVisible(false).setDepth(9999)
       : null;
 
     if (isLocal) {

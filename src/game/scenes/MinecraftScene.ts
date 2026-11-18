@@ -11,6 +11,7 @@ import { ensureMinecraftTextures, mcWaterFrameKey } from './minecraftPreloadText
 import { buildMinecraftWorld } from '../world/MinecraftWorldBuilder';
 import type { MinecraftTreeInfo } from '../world/MinecraftWorldBuilder';
 import { JungleQuestController, type JungleQuestUiHost } from '../quest/JungleQuestController';
+import { isAtJungleCamp } from '../quest/jungleQuestConfig';
 import type { JungleQuestHud } from '../../ui/JungleQuestHud';
 import { REGISTRY_KEYS } from './WorldScene';
 import { SCENE_KEYS } from './BootScene';
@@ -75,6 +76,7 @@ export class MinecraftScene extends Phaser.Scene {
           notifications?.show?.(text, kind);
         },
         setJungleProgress: (state) => jungleHud.setProgress(state),
+        showJungleCampNote: (onClose) => jungleHud.showCampNote(onClose),
         showJungleSymbol: (symbol, onClose) => jungleHud.showSymbol(symbol, onClose),
         showJungleCompletion: (onConfirm) => jungleHud.showCompletion(onConfirm),
         showJungleSecret: (onSubmit) => jungleHud.showSecret(onSubmit),
@@ -86,6 +88,7 @@ export class MinecraftScene extends Phaser.Scene {
         },
       };
       this.jungleQuest = new JungleQuestController(this.bridge, this.movement, jungleUi, built.openTemplePassage);
+      this.game.canvas.addEventListener('click', this.onCampClick);
     }
 
     this.unsubscribe.push(
@@ -96,15 +99,20 @@ export class MinecraftScene extends Phaser.Scene {
       }),
     );
 
-    const intro = this.registry.get(REGISTRY_KEYS.locationIntro) as
-      | { openMinecraft: () => void }
-      | undefined;
-    const skipIntro =
-      import.meta.env.DEV && sessionStorage.getItem('dev-skip-mc-intro') === '1';
-    if (!skipIntro) intro?.openMinecraft();
-
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.cleanup());
   }
+
+  // Обычный клик по canvas, поскольку Phaser Mouse/Touch отключены для DOM-джойстика.
+  private readonly onCampClick = (event: MouseEvent): void => {
+    const canvas = this.game.canvas;
+    const rect = canvas.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    const point = this.cameras.main.getWorldPoint(
+      (event.clientX - rect.left) * canvas.width / rect.width,
+      (event.clientY - rect.top) * canvas.height / rect.height,
+    );
+    if (isAtJungleCamp(point)) this.jungleQuest?.readCampNote(this.position);
+  };
 
   override update(time: number, delta: number): void {
     const elapsed = this.lastFrameTime > 0 ? time - this.lastFrameTime : delta;
@@ -188,6 +196,7 @@ export class MinecraftScene extends Phaser.Scene {
   }
 
   private cleanup(): void {
+    this.game.canvas.removeEventListener('click', this.onCampClick);
     for (const off of this.unsubscribe) off();
     this.unsubscribe = [];
     this.scale.off(Phaser.Scale.Events.RESIZE, this.applyZoom, this);

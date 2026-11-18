@@ -1,5 +1,5 @@
 import type { JungleQuestState, JungleSymbolId } from '../game/quest/jungleQuestTypes';
-import { JUNGLE_SYMBOLS } from '../game/quest/jungleQuestConfig';
+import { JUNGLE_CAMP_NOTE, JUNGLE_SYMBOLS } from '../game/quest/jungleQuestConfig';
 
 /** Компактный прогресс и модальные шаги квеста второй локации. */
 export class JungleQuestHud {
@@ -35,6 +35,16 @@ export class JungleQuestHud {
     this.progress.innerHTML = `<strong>Древние символы: ${found}/3</strong><div class="jungle-symbols">${cells}</div>`;
   }
 
+  showCampNote(onClose: () => void): void {
+    const { title, intro, clues } = JUNGLE_CAMP_NOTE;
+    this.open(
+      title,
+      `<p>${intro}</p><blockquote class="jungle-camp-clues">${clues.map((clue) => `<p>${clue}</p>`).join('')}</blockquote>`,
+      'Закрыть записку',
+      onClose,
+    );
+  }
+
   showSymbol(id: JungleSymbolId, onClose: () => void): void {
     const symbol = JUNGLE_SYMBOLS[id];
     this.open(
@@ -57,8 +67,8 @@ export class JungleQuestHud {
   showSecret(onSubmit: (value: string) => Promise<'wrong' | 'opened' | 'ignored'>): void {
     this.dialog.innerHTML = `
       <h2 class="legend-title">ПОСЛАНИЕ НАЙДЕНО</h2>
-      <div class="legend-body"><p>Вы нашли послание предыдущей команды! Кажется, они оставили вам способ открыть путь дальше.</p><p>Введите секретное слово.</p></div>
-      <input class="jungle-secret" aria-label="Секретное слово" autocomplete="off" autocapitalize="characters" />
+      <div class="legend-body"><p>Вы нашли послание предыдущей команды! Кажется, они оставили вам способ открыть путь дальше.</p></div>
+      <input class="jungle-secret" aria-label="Секретное слово" placeholder="Введите секретное слово" autocomplete="off" autocapitalize="characters" />
       <p class="jungle-secret-error" hidden></p>
       <button type="button" class="legend-start">Проверить</button>`;
     const input = this.dialog.querySelector('.jungle-secret') as HTMLInputElement;

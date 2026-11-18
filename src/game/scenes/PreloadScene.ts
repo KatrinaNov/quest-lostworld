@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { createRng, PALETTE } from '../config/worldConfig';
+import { createIslandDoorTexture } from '../world/islandDoorArt';
 import { SCENE_KEYS } from './BootScene';
 
 export const TEXTURES = {
@@ -33,13 +34,18 @@ export const QUEST_KEY_TEXTURE_BY_SLOT: readonly (typeof TEXTURES)[keyof typeof 
   TEXTURES.questKeyOrange,
 ];
 
+export const QUEST_KEY_FRAME = 'clean-key';
+
+/** Прямоугольники ключей в игровых PNG. Исключают края соседних объектов листа. */
+const QUEST_KEY_FRAMES = [
+  { key: TEXTURES.questKeyOrange, x: 0, y: 0, width: 258, height: 138 },
+  { key: TEXTURES.questKeyBlue, x: 0, y: 6, width: 253, height: 145 },
+  { key: TEXTURES.questKeyGreen, x: 0, y: 0, width: 253, height: 135 },
+] as const;
+
 type Draw = (g: Phaser.GameObjects.Graphics) => void;
 
-/**
- * Загрузка ресурсов. Сейчас вся графика рисуется программно (Phaser Graphics / Canvas),
- * поэтому внешних файлов нет. Позже сюда добавятся this.load.image(...) для настоящих спрайтов
- * из public/assets/.
- */
+/** Загружает спрайты ключей и готовит процедурные текстуры стартового острова. */
 export class PreloadScene extends Phaser.Scene {
   constructor() {
     super(SCENE_KEYS.preload);
@@ -51,11 +57,16 @@ export class PreloadScene extends Phaser.Scene {
     this.load.image(TEXTURES.questKeyGreen, 'key-green.png');
     this.load.image(TEXTURES.questKeyBlue, 'key-blue.png');
     this.load.image(TEXTURES.questKeyOrange, 'key-orange.png');
-    this.load.image(TEXTURES.ancientDoorClosed, 'door-closed.png');
-    this.load.image(TEXTURES.ancientDoorOpen, 'door-open.png');
   }
 
   create(): void {
+    for (const { key, x, y, width, height } of QUEST_KEY_FRAMES) {
+      if (this.textures.exists(key)) {
+        this.textures.get(key).add(QUEST_KEY_FRAME, 0, x, y, width, height);
+      }
+    }
+    createIslandDoorTexture(this, TEXTURES.ancientDoorClosed, false);
+    createIslandDoorTexture(this, TEXTURES.ancientDoorOpen, true);
     this.createGrass();
     this.createGlow();
     this.createPortal();

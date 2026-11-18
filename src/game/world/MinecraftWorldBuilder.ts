@@ -9,6 +9,8 @@ import {
 import { MC_TEXTURES, mcWaterFrameKey } from '../scenes/minecraftPreloadTextures';
 import { TEXTURES } from '../scenes/PreloadScene';
 import { bakeMinecraftCobblePaths } from './minecraftCobblePaths';
+import { addMinecraftCamp } from './minecraftCamp';
+import { JUNGLE_CAMP } from '../quest/jungleQuestConfig';
 import {
   groundTileKind,
   tileCountX,
@@ -54,7 +56,7 @@ export function buildMinecraftWorld(scene: Phaser.Scene): BuiltMinecraftWorld {
 
   addPortal(scene, obstacles, MINECRAFT_CONFIG.portal.x, MINECRAFT_CONFIG.portal.y);
   const openTemplePassage = addTemple(scene, obstacles, 480, 410);
-  addCamp(scene, obstacles, 1120, 980);
+  addMinecraftCamp(scene, obstacles);
   addJungleBorder(scene, obstacles, trees, treeRng);
   addForest(scene, obstacles, trees, treeRng);
   addMine(scene, obstacles, 730, 800, block);
@@ -263,7 +265,7 @@ function addForest(
   const paths = MINECRAFT_GROUND.pathPoints;
   const clearOfLandmarks = (x: number, y: number): boolean => {
     const landmarkZones = [
-      { x: 1120, y: 980, r: 300 }, // camp
+      { x: JUNGLE_CAMP.x, y: JUNGLE_CAMP.y, r: 300 }, // camp
       { x: 480, y: 410, r: 230 }, // temple
       { x: 730, y: 800, r: 150 }, // mine
       { x: 2040, y: 940, r: 230 }, // ruins
@@ -440,42 +442,6 @@ function addTemple(scene: Phaser.Scene, obstacles: { x: number; y: number; r: nu
       if (index >= 0) obstacles.splice(index, 1);
     }
   };
-}
-
-function addCamp(scene: Phaser.Scene, obstacles: { x: number; y: number; r: number }[], x: number, y: number): void {
-  const g = scene.add.graphics();
-  // Canvas, timber supports and open tent entrance.
-  g.fillStyle(0x5a4932, 0.45).fillEllipse(x, y + 50, 250, 58);
-  g.fillStyle(0x7a5736, 1).fillTriangle(x - 100, y + 24, x, y - 95, x + 100, y + 24);
-  g.fillStyle(0xd6bd8b, 1).fillTriangle(x - 92, y + 18, x, y - 84, x - 8, y + 18);
-  g.fillStyle(0xf0dba7, 1).fillTriangle(x + 8, y + 18, x, y - 84, x + 92, y + 18);
-  g.fillStyle(0x352b20, 1).fillTriangle(x - 24, y + 20, x, y - 28, x + 24, y + 20);
-  g.lineStyle(7, 0x654326, 1).lineBetween(x - 118, y + 22, x + 118, y + 22);
-  g.setDepth(y + 40);
-
-  // Crates, a map table, and a stone-ring campfire.
-  for (const [dx, dy] of [[-156, 28], [154, 44], [110, 100], [-100, 115]] as const) {
-    g.fillStyle(0x674327, 1).fillRect(x + dx, y + dy, 48, 42);
-    g.lineStyle(4, 0xb47b3e, 1).strokeRect(x + dx, y + dy, 48, 42);
-    g.lineStyle(3, 0x412d20, 1).lineBetween(x + dx, y + dy + 21, x + dx + 48, y + dy + 21);
-  }
-  g.fillStyle(0x5b3926, 1).fillRect(x + 10, y + 110, 116, 14);
-  g.fillStyle(0xd3b67a, 1).fillRect(x + 18, y + 88, 100, 26);
-  g.fillStyle(0x526b45, 1).fillRect(x + 40, y + 95, 28, 10);
-  g.fillStyle(0xf3a12c, 1).fillCircle(x - 16, y + 145, 22);
-  g.fillStyle(0xffe276, 1).fillCircle(x - 16, y + 145, 11);
-  for (let i = 0; i < 8; i += 1) {
-    const a = i * Math.PI / 4;
-    g.fillStyle(0x77756d, 1).fillRect(x - 16 + Math.cos(a) * 36 - 10, y + 145 + Math.sin(a) * 24 - 8, 20, 16);
-  }
-  g.setDepth(y + 180);
-  // Every solid camp prop has its own collision: the tent, four crates, map table and fire ring.
-  obstacles.push(
-    { x: x - 62, y: y - 18, r: 38 }, { x, y: y - 54, r: 38 }, { x: x + 62, y: y - 18, r: 38 },
-    { x: x - 132, y: y + 49, r: 30 }, { x: x + 178, y: y + 65, r: 30 },
-    { x: x + 134, y: y + 121, r: 30 }, { x: x - 76, y: y + 136, r: 30 },
-    { x: x + 68, y: y + 101, r: 44 }, { x: x - 16, y: y + 145, r: 38 },
-  );
 }
 
 function addWaterfall(scene: Phaser.Scene, obstacles: { x: number; y: number; r: number }[]): void {

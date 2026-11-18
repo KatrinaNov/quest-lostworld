@@ -31,7 +31,6 @@ export function createGame(
   virtualInput: VirtualInput | null,
   questUi: QuestUiHost | null = null,
   questHud: QuestHud | null = null,
-  locationIntro: { openMinecraft: () => void } | null = null,
   jungleHud: JungleQuestHud | null = null,
   templeHud: TempleQuestHud | null = null,
   notifications: { show: (text: string, kind?: 'info' | 'success' | 'warn') => void } | null = null,
@@ -65,7 +64,6 @@ export function createGame(
         g.registry.set(REGISTRY_KEYS.virtualInput, virtualInput);
         g.registry.set(REGISTRY_KEYS.questUi, questUi);
         g.registry.set(REGISTRY_KEYS.questHud, questHud);
-        g.registry.set(REGISTRY_KEYS.locationIntro, locationIntro);
         g.registry.set(REGISTRY_KEYS.jungleHud, jungleHud);
         g.registry.set(REGISTRY_KEYS.templeHud, templeHud);
         g.registry.set(REGISTRY_KEYS.notifications, notifications);

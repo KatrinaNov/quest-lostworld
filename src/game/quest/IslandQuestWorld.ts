@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { PALETTE } from '../config/worldConfig';
-import { QUEST_KEY_TEXTURE_BY_SLOT, TEXTURES } from '../scenes/PreloadScene';
+import { QUEST_KEY_FRAME, QUEST_KEY_TEXTURE_BY_SLOT, TEXTURES } from '../scenes/PreloadScene';
+import { ISLAND_DOOR_ART } from '../world/islandDoorArt';
 import { ISLAND_QUEST } from './islandQuestConfig';
 import type { IslandQuestState } from './islandQuestTypes';
 
@@ -15,7 +16,6 @@ export class IslandQuestWorld {
   private readonly doorOpen: Phaser.GameObjects.Image;
   private doorOpenVisual = false;
   private floatStarted = false;
-  private readonly doorScale = ISLAND_QUEST.doorScale;
   private readonly keyScale = ISLAND_QUEST.keyScale;
 
   constructor(scene: Phaser.Scene) {
@@ -26,27 +26,27 @@ export class IslandQuestWorld {
     this.doorClosed = scene.add
       .image(door.x, door.y, TEXTURES.ancientDoorClosed)
       .setOrigin(0.5, 0.985)
-      .setScale(this.doorScale * 2)
+      .setScale(1 / ISLAND_DOOR_ART.resolution)
       .setDepth(doorDepth);
 
     this.doorOpen = scene.add
       .image(door.x, door.y, TEXTURES.ancientDoorOpen)
       .setOrigin(0.5, 0.985)
-      .setScale(this.doorScale * 2)
+      .setScale(1 / ISLAND_DOOR_ART.resolution)
       .setDepth(doorDepth + 0.1)
       .setVisible(false);
 
     this.doorGlow = scene.add
-      .image(door.x, door.y - 88, TEXTURES.glow)
-      .setScale(1.65)
-      .setTint(PALETTE.glowViolet)
+      .image(door.x, door.y - 56, TEXTURES.glow)
+      .setScale(0.96)
+      .setTint(PALETTE.glowCyan)
       .setBlendMode(Phaser.BlendModes.ADD)
-      .setAlpha(0.06)
+      .setAlpha(0)
       .setDepth(doorDepth - 0.5);
 
     this.portalLight = scene.add
-      .image(door.x, door.y - 130, TEXTURES.portalCore)
-      .setScale(0.28)
+      .image(door.x, door.y - 57, TEXTURES.portalCore)
+      .setScale(0.22)
       .setBlendMode(Phaser.BlendModes.ADD)
       .setAlpha(0)
       .setDepth(doorDepth + 0.2);
@@ -61,7 +61,7 @@ export class IslandQuestWorld {
         .setDepth(1)
         .setVisible(false);
       const key = scene.add
-        .image(0, 0, QUEST_KEY_TEXTURE_BY_SLOT[i])
+        .image(0, 0, QUEST_KEY_TEXTURE_BY_SLOT[i], QUEST_KEY_FRAME)
         .setOrigin(0.5, 0.92)
         .setScale(this.keyScale * 2)
         .setDepth(2)
@@ -71,8 +71,8 @@ export class IslandQuestWorld {
     }
   }
 
-  applyState(state: IslandQuestState): void {
-    if (!this.floatStarted) {
+  applyState(state: IslandQuestState, showKeys: boolean): void {
+    if (showKeys && !this.floatStarted) {
       this.floatStarted = true;
       for (let i = 0; i < this.keys.length; i += 1) {
         const key = this.keys[i];
@@ -107,7 +107,7 @@ export class IslandQuestWorld {
       glow.setDepth(depth - 1);
 
       const active = i < state.activeSlots;
-      const onMap = active && state.slots[i] === 'map';
+      const onMap = showKeys && active && state.slots[i] === 'map';
       key.setVisible(onMap);
       glow.setVisible(onMap);
     }
@@ -119,13 +119,13 @@ export class IslandQuestWorld {
         this.doorOpenVisual = true;
         this.scene.tweens.add({
           targets: [this.doorGlow, this.portalLight],
-          alpha: { from: 0.06, to: 0.55 },
+          alpha: { from: 0, to: 0.24 },
           duration: 900,
           ease: 'Sine.out',
         });
         this.scene.tweens.add({
           targets: this.portalLight,
-          scale: { from: 0.28, to: 0.36 },
+          scale: { from: 0.22, to: 0.30 },
           duration: 1400,
           yoyo: true,
           repeat: -1,
@@ -135,8 +135,9 @@ export class IslandQuestWorld {
     } else {
       this.doorClosed.setVisible(true);
       this.doorOpen.setVisible(false);
+      if (this.doorOpenVisual) this.scene.tweens.killTweensOf([this.doorGlow, this.portalLight]);
       this.doorOpenVisual = false;
-      this.doorGlow.setAlpha(0.06);
+      this.doorGlow.setAlpha(0);
       this.portalLight.setAlpha(0);
     }
   }

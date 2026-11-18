@@ -8,6 +8,30 @@ export interface JungleInspectZone extends Point {
   symbol?: JungleSymbolId;
 }
 
+export const JUNGLE_CAMP = {
+  x: 1120,
+  y: 980,
+  note: { x: 1188, y: 1080 },
+  footprint: { left: 950, top: 880, right: 1330, bottom: 1158 },
+  approachMargin: 45,
+} as const;
+
+export function isAtJungleCamp(point: Point, margin = 0): boolean {
+  const { left, top, right, bottom } = JUNGLE_CAMP.footprint;
+  return point.x >= left - margin && point.x <= right + margin
+    && point.y >= top - margin && point.y <= bottom + margin;
+}
+
+export const JUNGLE_CAMP_NOTE = {
+  title: 'Записка у костра',
+  intro: 'Путники! Мы шли за кладом Замка дракона. Осмотрите места из записки и соберите три знака, чтобы найти путь к храму.',
+  clues: [
+    'На западе великан носит зелёные косы.',
+    'На северо-востоке вода бежит по каменным ступеням.',
+    'На востоке стены пали, но большие камни хранят память.',
+  ],
+} as const;
+
 /** Невидимые зоны лежат поверх уже нарисованных объектов второй локации. */
 export const JUNGLE_INSPECT_ZONES: readonly JungleInspectZone[] = [
   { id: 'vine-tree', name: 'Большое дерево с лианами', x: 300, y: 670, radius: 84, symbol: 'leaf' },
@@ -22,9 +46,6 @@ export const JUNGLE_INSPECT_ZONES: readonly JungleInspectZone[] = [
   { id: 'wall-fragment', name: 'Обломки каменной стены', x: 2130, y: 1060, radius: 72 },
   { id: 'old-lantern', name: 'Старый фонарь', x: 826, y: 785, radius: 72 },
   { id: 'mine-rails', name: 'Рельсы у шахты', x: 730, y: 910, radius: 72 },
-  { id: 'camp-crate', name: 'Походный сундук', x: 966, y: 1028, radius: 72 },
-  { id: 'camp-map', name: 'Карта на столе', x: 1188, y: 1080, radius: 72 },
-  { id: 'campfire', name: 'Костёр', x: 1104, y: 1125, radius: 72 },
   { id: 'broken-pillar', name: 'Сломанная колонна', x: 530, y: 510, radius: 72 },
   { id: 'moss-stones', name: 'Мшистые камни', x: 860, y: 480, radius: 72 },
   { id: 'palm', name: 'Пальма', x: 1360, y: 380, radius: 72 },

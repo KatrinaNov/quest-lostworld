@@ -14,7 +14,6 @@ export const REGISTRY_KEYS = {
   virtualInput: 'virtualInput',
   questUi: 'questUi',
   questHud: 'questHud',
-  locationIntro: 'locationIntro',
   jungleHud: 'jungleHud',
   templeHud: 'templeHud',
   notifications: 'notifications',

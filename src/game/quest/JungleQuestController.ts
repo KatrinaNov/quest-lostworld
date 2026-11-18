@@ -1,12 +1,13 @@
 import type { GameBridge, Point } from '../../network/types';
 import type { MovementSystem } from '../systems/MovementSystem';
-import { JUNGLE_INSPECT_ZONES, JUNGLE_SYMBOLS, JUNGLE_TEMPLE, type JungleInspectZone } from './jungleQuestConfig';
+import { isAtJungleCamp, JUNGLE_CAMP, JUNGLE_INSPECT_ZONES, JUNGLE_SYMBOLS, JUNGLE_TEMPLE, type JungleInspectZone } from './jungleQuestConfig';
 import type { JungleQuestState } from './jungleQuestTypes';
 
 export interface JungleQuestUiHost {
   setActionAtWorld(x: number, y: number, label: string | null, onClick: (() => void) | null): void;
   notify(text: string, kind?: 'info' | 'success' | 'warn'): void;
   setJungleProgress(state: JungleQuestState): void;
+  showJungleCampNote(onClose: () => void): void;
   showJungleSymbol(symbol: keyof typeof JUNGLE_SYMBOLS, onClose: () => void): void;
   showJungleCompletion(onConfirm: () => void): void;
   showJungleSecret(onSubmit: (value: string) => Promise<'wrong' | 'opened' | 'ignored'>): void;
@@ -29,6 +30,7 @@ export class JungleQuestController {
   private secretShown = false;
   private templeShown = false;
   private pending = false;
+  private disposed = false;
 
   constructor(
     private readonly bridge: GameBridge,
@@ -42,6 +44,7 @@ export class JungleQuestController {
   }
 
   destroy(): void {
+    this.disposed = true;
     for (const stop of this.off) stop();
     // Кнопка привязана к DOM-HUD, а не к сцене Phaser: без явной очистки она
     // могла остаться поверх уже открывшегося храма.
@@ -50,7 +53,20 @@ export class JungleQuestController {
   }
 
   tick(position: Point): void {
-    if (this.modalOpen || !this.bridge.isJungleQuestReady()) {
+    if (this.modalOpen) {
+      this.ui.setActionAtWorld(0, 0, null, null);
+      return;
+    }
+
+    if (this.canReadCampNote(position)) {
+      const { x, y } = JUNGLE_CAMP.note;
+      const read = () => this.readCampNote(position);
+      this.ui.setActionAtWorld(x, y, 'Прочитать записку', read);
+      if (this.movement.consumeInteractPress()) read();
+      return;
+    }
+
+    if (!this.bridge.isJungleQuestReady()) {
       this.ui.setActionAtWorld(0, 0, null, null);
       return;
     }
@@ -78,6 +94,22 @@ export class JungleQuestController {
     const run = () => void this.inspect(candidate.zone);
     this.ui.setActionAtWorld(candidate.zone.x, candidate.zone.y, 'Осмотреть', run);
     if (this.movement.consumeInteractPress()) run();
+  }
+
+  readCampNote(position: Point): void {
+    if (!this.canReadCampNote(position)) return;
+    this.modalOpen = true;
+    this.ui.setActionAtWorld(0, 0, null, null);
+    this.ui.showJungleCampNote(() => {
+      this.modalOpen = false;
+      this.presentState();
+    });
+  }
+
+  private canReadCampNote(position: Point): boolean {
+    return !this.disposed && !this.modalOpen && !this.pending
+      && (this.state.phase === 'exploring' || this.state.phase === 'temple_open')
+      && isAtJungleCamp(position, JUNGLE_CAMP.approachMargin);
   }
 
   private nearest(position: Point): Candidate | null {
@@ -127,20 +159,20 @@ export class JungleQuestController {
   }
 
   private presentState(): void {
+    if (this.disposed) return;
     this.ui.setJungleProgress(this.state);
     // terminal-состояние должно заменить любое открытое локальное окно. Иначе
     // у второго игрока оставалось поле секретного слова после успеха первого.
     if (this.state.phase === 'temple_open') {
+      if (this.templeShown) return;
+      this.templeShown = true;
       if (this.modalOpen) {
         this.modalOpen = false;
         this.ui.closeJungleModal();
       }
-      if (!this.templeShown) {
-        this.templeShown = true;
-        this.openTemplePassage();
-        this.modalOpen = true;
-        this.ui.showJungleTempleOpen(() => { this.modalOpen = false; });
-      }
+      this.openTemplePassage();
+      this.modalOpen = true;
+      this.ui.showJungleTempleOpen(() => { this.modalOpen = false; });
       return;
     }
     if (this.modalOpen) return;

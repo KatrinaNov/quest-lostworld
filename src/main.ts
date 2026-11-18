@@ -8,7 +8,6 @@ import { enterFullscreen, isFullscreen, isMobileDevice, isStandalone } from './u
 import type { QuestUiHost } from './game/quest/IslandQuestController';
 import { Hud } from './ui/Hud';
 import { LegendModal } from './ui/LegendModal';
-import { LocationIntroModal } from './ui/LocationIntroModal';
 import { Lobby } from './ui/Lobby';
 import { MobileControls } from './ui/MobileControls';
 import { Notifications } from './ui/Notifications';
@@ -60,7 +59,6 @@ class App {
   private controls: MobileControls | null = null;
   private legend: LegendModal | null = null;
   private questHud: QuestHud | null = null;
-  private locationIntro: LocationIntroModal | null = null;
   private jungleHud: JungleQuestHud | null = null;
   private templeHud: TempleQuestHud | null = null;
   private roomListeners: Array<() => void> = [];
@@ -150,16 +148,13 @@ class App {
     this.questHud = new QuestHud(this.uiRoot);
     this.jungleHud = new JungleQuestHud(this.uiRoot);
     this.templeHud = new TempleQuestHud(this.uiRoot);
-    this.locationIntro = new LocationIntroModal(this.uiRoot);
 
     const questUi: QuestUiHost = {
       setActionAtWorld: (x, y, label, onClick) => this.questHud?.setActionAtWorld(x, y, label, onClick),
       setHintAtWorld: (x, y, text) => this.questHud?.setHintAtWorld(x, y, text),
       clearWorldUi: () => this.questHud?.clearWorldUi(),
-      openLegend: (onOpen, onClose) => {
-        onOpen();
-        this.legend?.open({ onClose });
-      },
+      openLegend: (onStart, onClose) => this.legend?.open({ onStart, onClose }),
+      closeLegend: () => this.legend?.close(),
       notify: (text, kind = 'info') => this.notifications.show(text, kind),
       setPortalBanner: (visible, text) => this.questHud?.setPortalBanner(visible, text),
       onAllKeysDelivered: () =>
@@ -179,7 +174,6 @@ class App {
       this.controls,
       questUi,
       this.questHud,
-      this.locationIntro,
       this.jungleHud,
       this.templeHud,
       this.notifications,
@@ -240,10 +234,8 @@ class App {
     this.controls = null;
     this.questHud?.destroy();
     this.questHud = null;
-    this.legend?.close();
+    this.legend?.destroy();
     this.legend = null;
-    this.locationIntro?.close();
-    this.locationIntro = null;
     this.jungleHud?.destroy();
     this.jungleHud = null;
     this.templeHud?.destroy();
