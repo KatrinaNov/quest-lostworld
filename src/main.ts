@@ -42,6 +42,10 @@ function startsAtTempleForTesting(): boolean {
   return new URLSearchParams(window.location.search).get('test') === 'temple';
 }
 
+function startsAtMazeForTesting(): boolean {
+  return new URLSearchParams(window.location.search).get('test') === 'maze';
+}
+
 /**
  * Единственное место, где соединяются UI, сеть и игра.
  * Сцены Phaser о сети не знают, сетевой слой — об интерфейсе и сценах.
@@ -139,6 +143,7 @@ class App {
     // MinecraftScene уже умеет безопасно передать игрока в TempleScene по этому ключу.
     // Код комнаты входит в значение, поэтому тестовый переход не затрагивает другие комнаты.
     if (startsAtTempleForTesting()) sessionStorage.setItem('temple-room', room.roomCode);
+    if (startsAtMazeForTesting()) sessionStorage.setItem('maze-room', room.roomCode);
     this.lobby.hide();
     this.setMode('game');
 

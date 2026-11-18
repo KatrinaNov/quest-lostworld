@@ -45,6 +45,10 @@ export class WorldScene extends Phaser.Scene {
     // При тестовом входе и после перезагрузки внутри храма сначала попадаем
     // в стартовую сцену. Передаём её сразу в MinecraftScene, которая уже
     // маршрутизирует комнату в TempleScene по temple-room.
+    if (sessionStorage.getItem('maze-room') === this.bridge.roomCode) {
+      this.scene.start(SCENE_KEYS.labyrinth);
+      return;
+    }
     if (sessionStorage.getItem('temple-room') === this.bridge.roomCode || this.bridge.getQuestState().locationId === 2) {
       this.scene.start(SCENE_KEYS.minecraft);
       return;

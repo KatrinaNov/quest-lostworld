@@ -11,6 +11,8 @@ import { initialTempleQuestState } from '../game/quest/templeQuestTypes';
 import { IslandQuestSync } from './islandQuestSync';
 import { JungleQuestSync } from './jungleQuestSync';
 import { TempleQuestSync } from './templeQuestSync';
+import { MazeQuestSync } from './mazeQuestSync';
+import { initialMazeQuestState } from '../game/quest/mazeQuestTypes';
 import { Emitter } from './emitter';
 import {
   GameError,
@@ -107,6 +109,8 @@ export class RealtimeRoom extends Emitter<RoomEvents> implements RoomSession {
   private templeQuest: TempleQuestSync | null = null;
   private templeOff: (() => void) | null = null;
   private templeStarting: Promise<void> | null = null;
+  private mazeQuest: MazeQuestSync | null = null;
+  private mazeStarting: Promise<void> | null = null;
 
   constructor(
     private readonly client: SupabaseClient,
@@ -209,6 +213,11 @@ export class RealtimeRoom extends Emitter<RoomEvents> implements RoomSession {
   templeTransition() {
     return this.templeQuest?.transition() ?? Promise.resolve('loading' as const);
   }
+  getMazeQuestState() { return this.mazeQuest?.getState() ?? initialMazeQuestState(); }
+  isMazeQuestReady(): boolean { return this.mazeQuest?.isReady() ?? false; }
+  async mazeStart(): Promise<void> { if (this.mazeQuest?.isReady()) return; if (this.mazeStarting) return this.mazeStarting; const team = this.getTempleQuestState().team.map((member) => member.id); const sync = new MazeQuestSync(this.client, this.roomCode, team.length ? team : this.getPlayers().map((p) => p.id)); this.mazeQuest = sync; sync.on('mazeState', (state) => this.emit('mazeState', state)); this.mazeStarting = sync.start().then(() => { if (this.mazeQuest === sync) this.emit('mazeState', sync.getState()); }).finally(() => { this.mazeStarting = null; }); return this.mazeStarting; }
+  mazeSaveCheckpoint(index: number) { return this.mazeQuest?.checkpoint(index) ?? Promise.resolve('loading' as const); }
+  mazeArrive() { return this.mazeQuest?.arrive() ?? Promise.resolve('loading' as const); }
 
   /**
    * Подключение к комнате с проверками:

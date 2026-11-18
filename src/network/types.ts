@@ -99,6 +99,7 @@ export interface RoomEvents {
   jungleState: import('../game/quest/jungleQuestTypes').JungleQuestState;
   /** Серверное состояние плит и двери храма. */
   templeState: import('../game/quest/templeQuestTypes').TempleQuestState;
+  mazeState: import('../game/quest/mazeQuestTypes').MazeQuestState;
   /** Сессию пришлось завершить (например, комната оказалась переполнена). */
   kicked: RoomLeaveReason;
 }
@@ -131,6 +132,11 @@ export interface GameBridge {
   templeCollectStar(index: number): Promise<import('../game/quest/templeQuestTypes').TempleQuestActionResult>;
   templeRevealHint(): Promise<import('../game/quest/templeQuestTypes').TempleQuestActionResult>;
   templeTransition(): Promise<import('../game/quest/templeQuestTypes').TempleQuestActionResult>;
+  getMazeQuestState(): import('../game/quest/mazeQuestTypes').MazeQuestState;
+  isMazeQuestReady(): boolean;
+  mazeStart(): Promise<void>;
+  mazeSaveCheckpoint(index: number): Promise<import('../game/quest/mazeQuestTypes').MazeResult>;
+  mazeArrive(): Promise<import('../game/quest/mazeQuestTypes').MazeResult>;
 }
 
 /** Сессия комнаты для приложения: мост для игры + возможность выйти. */

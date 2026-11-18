@@ -1,0 +1,6 @@
+import Phaser from 'phaser';
+export interface MazePlayerState { checkpoint: number; arrived: boolean; }
+export interface MazeQuestState { revision: number; team: string[]; players: Record<string, MazePlayerState>; completed: boolean; }
+export type MazeResult = 'synced' | 'checkpoint_saved' | 'arrived' | 'completed' | 'loading' | 'ignored';
+export const initialMazeQuestState = (): MazeQuestState => ({ revision: 0, team: [], players: {}, completed: false });
+export function parseMazeQuestState(raw: unknown): MazeQuestState | null { if (!raw || typeof raw !== 'object') return null; const r = raw as Record<string, unknown>; if (typeof r.revision !== 'number' || !Array.isArray(r.team) || typeof r.players !== 'object' || r.players === null || typeof r.completed !== 'boolean') return null; const players: Record<string, MazePlayerState> = {}; for (const [id, item] of Object.entries(r.players as Record<string, unknown>)) { if (!item || typeof item !== 'object') continue; const p = item as Record<string, unknown>; if (typeof p.checkpoint === 'number' && typeof p.arrived === 'boolean') players[id] = { checkpoint: Phaser.Math.Clamp(Math.floor(p.checkpoint), 0, 2), arrived: p.arrived }; } return { revision: r.revision, team: r.team.filter((id): id is string => typeof id === 'string'), players, completed: r.completed }; }

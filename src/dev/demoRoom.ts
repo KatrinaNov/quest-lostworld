@@ -17,6 +17,7 @@ import {
   type JungleSymbolId,
 } from '../game/quest/jungleQuestTypes';
 import { initialTempleQuestState, type TempleQuestState } from '../game/quest/templeQuestTypes';
+import { initialMazeQuestState, type MazeQuestState } from '../game/quest/mazeQuestTypes';
 
 /**
  * ТОЛЬКО ДЛЯ РАЗРАБОТКИ (npm run dev, адрес ?demo=1): локальная «комната» без Supabase
@@ -33,6 +34,7 @@ export class DemoRoom extends Emitter<RoomEvents> implements RoomSession {
   private readonly questOff: () => void;
   private jungleState: JungleQuestState = initialJungleQuestState();
   private templeState: TempleQuestState = initialTempleQuestState();
+  private mazeState: MazeQuestState = initialMazeQuestState();
 
   constructor(name: string, preview: DevPreviewOptions | null = null) {
     super();
@@ -207,6 +209,11 @@ export class DemoRoom extends Emitter<RoomEvents> implements RoomSession {
     this.emit('templeState', this.templeState);
     return 'transitioned' as const;
   }
+  getMazeQuestState(): MazeQuestState { return this.mazeState; }
+  isMazeQuestReady(): boolean { return true; }
+  async mazeStart(): Promise<void> { if (!this.mazeState.team.length) this.mazeState = { ...this.mazeState, team: [this.self.id] }; this.emit('mazeState', this.mazeState); }
+  async mazeSaveCheckpoint(index: number) { const players = { ...this.mazeState.players, [this.self.id]: { checkpoint: Math.max(0, Math.min(2, index)), arrived: this.mazeState.players[this.self.id]?.arrived ?? false } }; this.mazeState = { ...this.mazeState, revision: this.mazeState.revision + 1, players }; this.emit('mazeState', this.mazeState); return 'checkpoint_saved' as const; }
+  async mazeArrive() { const players = { ...this.mazeState.players, [this.self.id]: { checkpoint: this.mazeState.players[this.self.id]?.checkpoint ?? 0, arrived: true } }; this.mazeState = { ...this.mazeState, revision: this.mazeState.revision + 1, players, completed: true }; this.emit('mazeState', this.mazeState); return 'completed' as const; }
 
   sendPosition(x: number, y: number): void {
     this.self.x = x;
