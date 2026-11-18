@@ -15,7 +15,7 @@ export const ISLAND_QUEST = {
    */
   door: { x: 2235, y: 812, interactRadius: 100 } satisfies Point & { interactRadius: number },
 
-  /** Масштаб PNG → мир (равномерный, без растягивания). */
+  /** Масштаб исходных спрайтов → мир. Игровые PNG сохраняются в половинном размере. */
   doorScale: 0.17,
   keyScale: 0.11,
 

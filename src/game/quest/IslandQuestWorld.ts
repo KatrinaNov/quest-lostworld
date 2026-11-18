@@ -26,13 +26,13 @@ export class IslandQuestWorld {
     this.doorClosed = scene.add
       .image(door.x, door.y, TEXTURES.ancientDoorClosed)
       .setOrigin(0.5, 0.985)
-      .setScale(this.doorScale)
+      .setScale(this.doorScale * 2)
       .setDepth(doorDepth);
 
     this.doorOpen = scene.add
       .image(door.x, door.y, TEXTURES.ancientDoorOpen)
       .setOrigin(0.5, 0.985)
-      .setScale(this.doorScale)
+      .setScale(this.doorScale * 2)
       .setDepth(doorDepth + 0.1)
       .setVisible(false);
 
@@ -63,7 +63,7 @@ export class IslandQuestWorld {
       const key = scene.add
         .image(0, 0, QUEST_KEY_TEXTURE_BY_SLOT[i])
         .setOrigin(0.5, 0.92)
-        .setScale(this.keyScale)
+        .setScale(this.keyScale * 2)
         .setDepth(2)
         .setVisible(false);
       this.keyGlows.push(glow);

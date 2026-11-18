@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import type { GameBridge } from '../../network/types';
 
 export const SCENE_KEYS = {
   boot: 'BootScene',
@@ -17,6 +18,9 @@ export class BootScene extends Phaser.Scene {
 
   create(): void {
     this.cameras.main.setBackgroundColor('#0b1511');
-    this.scene.start(SCENE_KEYS.preload);
+    const { roomCode } = this.registry.get('bridge') as GameBridge;
+    if (sessionStorage.getItem('maze-room') === roomCode) this.scene.start(SCENE_KEYS.labyrinth);
+    else if (sessionStorage.getItem('temple-room') === roomCode) this.scene.start(SCENE_KEYS.temple);
+    else this.scene.start(SCENE_KEYS.preload);
   }
 }

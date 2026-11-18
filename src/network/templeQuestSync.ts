@@ -19,7 +19,9 @@ export class TempleQuestSync extends Emitter<TempleEvents> {
     await this.act('sync');
     this.channel = this.client.channel(`temple-quest:${this.roomCode}`).on('postgres_changes', { event: '*', schema: 'public', table: 'temple_quest_states', filter: `room_code=eq.${this.roomCode}` }, ({ new: row }) => this.ingest(row));
     this.channel.subscribe();
-    this.heartbeat = setInterval(() => void this.act('sync').catch(() => undefined), 10000);
+    if (this.state.phase !== 'transitioned') {
+      this.heartbeat = setInterval(() => void this.act('sync').catch(() => undefined), 10000);
+    }
   }
   checkpoint(index: number): Promise<TempleQuestActionResult> { return this.act('checkpoint', undefined, index); }
   setPlate(active: boolean): Promise<TempleQuestActionResult> { return this.act('plate', active); }
@@ -68,6 +70,10 @@ export class TempleQuestSync extends Emitter<TempleEvents> {
       || JSON.stringify(next.team) !== JSON.stringify(this.state.team)
       || JSON.stringify(next.stars) !== JSON.stringify(this.state.stars);
     this.state = next; this.ready = true;
+    if (next.phase === 'transitioned' && this.heartbeat) {
+      clearInterval(this.heartbeat);
+      this.heartbeat = null;
+    }
     if (changed) this.emit('templeState', next);
   }
 }

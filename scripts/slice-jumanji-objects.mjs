@@ -7,7 +7,6 @@ const src = path.join(root, 'public/assets/images/door-key.png');
 const outDir = path.join(root, 'public/assets/objects');
 
 fs.mkdirSync(outDir, { recursive: true });
-fs.copyFileSync(src, path.join(outDir, 'door-key-source.png'));
 
 /** Области на листе 1536×1024 (ключи слева, дверь справа). */
 const REGIONS = {
@@ -44,6 +43,8 @@ async function stripBlackTrim(region) {
 
 async function write(name, region, extra) {
   let pipe = sharp(await stripBlackTrim(region));
+  const { width, height } = await pipe.metadata();
+  pipe = pipe.resize(Math.round(width / 2), Math.round(height / 2), { fit: 'fill' });
   if (extra?.brightness) pipe = pipe.modulate({ brightness: extra.brightness, saturation: extra.saturation ?? 1 });
   const buf = await pipe.toBuffer();
   const file = path.join(outDir, name);

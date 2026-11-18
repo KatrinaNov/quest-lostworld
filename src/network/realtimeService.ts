@@ -215,7 +215,24 @@ export class RealtimeRoom extends Emitter<RoomEvents> implements RoomSession {
   }
   getMazeQuestState() { return this.mazeQuest?.getState() ?? initialMazeQuestState(); }
   isMazeQuestReady(): boolean { return this.mazeQuest?.isReady() ?? false; }
-  async mazeStart(): Promise<void> { if (this.mazeQuest?.isReady()) return; if (this.mazeStarting) return this.mazeStarting; const team = this.getTempleQuestState().team.map((member) => member.id); const sync = new MazeQuestSync(this.client, this.roomCode, team.length ? team : this.getPlayers().map((p) => p.id)); this.mazeQuest = sync; sync.on('mazeState', (state) => this.emit('mazeState', state)); this.mazeStarting = sync.start().then(() => { if (this.mazeQuest === sync) this.emit('mazeState', sync.getState()); }).finally(() => { this.mazeStarting = null; }); return this.mazeStarting; }
+  async mazeStart(): Promise<void> {
+    if (this.closing || this.mazeQuest?.isReady()) return;
+    if (this.mazeStarting) return this.mazeStarting;
+    const sync = new MazeQuestSync(this.client, this.roomCode, () => {
+      const temple = this.getTempleQuestState();
+      return temple.phase === 'transitioned'
+        ? temple.team.map((member) => member.id)
+        : this.getPlayers().map((player) => player.id);
+    });
+    this.mazeQuest = sync;
+    sync.on('mazeState', (state) => this.emit('mazeState', state));
+    this.mazeStarting = sync.start().catch(async (error: unknown) => {
+      if (this.mazeQuest === sync) this.mazeQuest = null;
+      await sync.destroy();
+      throw error;
+    }).finally(() => { this.mazeStarting = null; });
+    return this.mazeStarting;
+  }
   mazeSaveCheckpoint(index: number) { return this.mazeQuest?.checkpoint(index) ?? Promise.resolve('loading' as const); }
   mazeArrive() { return this.mazeQuest?.arrive() ?? Promise.resolve('loading' as const); }
 
@@ -329,6 +346,8 @@ export class RealtimeRoom extends Emitter<RoomEvents> implements RoomSession {
     if (this.closing) return;
     this.closing = true;
     this.active = false;
+    void this.mazeQuest?.destroy();
+    this.mazeQuest = null;
     this.pendingSubscribe = null;
     this.stopBackgroundWork();
     if (this.reconnectTimer !== null) clearTimeout(this.reconnectTimer);
@@ -426,6 +445,7 @@ export class RealtimeRoom extends Emitter<RoomEvents> implements RoomSession {
     this.flushPosition();
     this.quest?.broadcastFullStateIfNeeded();
     void this.jungleQuest?.refresh().catch(() => undefined);
+    void this.mazeQuest?.refresh().catch(() => undefined);
   }
 
   private scheduleReconnect(delay: number): void {

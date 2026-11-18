@@ -7,7 +7,7 @@ import {
 } from '../config/minecraftWorldConfig';
 import { PlayerAvatar } from '../entities/Player';
 import { MovementSystem, type VirtualInput } from '../systems/MovementSystem';
-import { mcWaterFrameKey } from './minecraftPreloadTextures';
+import { ensureMinecraftTextures, mcWaterFrameKey } from './minecraftPreloadTextures';
 import { buildMinecraftWorld } from '../world/MinecraftWorldBuilder';
 import type { MinecraftTreeInfo } from '../world/MinecraftWorldBuilder';
 import { JungleQuestController, type JungleQuestUiHost } from '../quest/JungleQuestController';
@@ -36,12 +36,9 @@ export class MinecraftScene extends Phaser.Scene {
   create(): void {
     this.cameras.main.setBackgroundColor('#6dae5a');
     this.bridge = this.registry.get(REGISTRY_KEYS.bridge) as GameBridge;
-    if (sessionStorage.getItem('temple-room') === this.bridge.roomCode) {
-      this.scene.start(SCENE_KEYS.temple);
-      return;
-    }
     const virtualInput = (this.registry.get(REGISTRY_KEYS.virtualInput) as VirtualInput | undefined) ?? null;
 
+    ensureMinecraftTextures(this);
     const built = buildMinecraftWorld(this);
     const { obstacles } = built;
     this.waterTiles = built.waterTiles;

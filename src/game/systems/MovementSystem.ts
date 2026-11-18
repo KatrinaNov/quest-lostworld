@@ -39,6 +39,7 @@ export class MovementSystem {
     } = WORLD_BOUNDS,
     private readonly speed = WORLD_CONFIG.player.speed,
     private readonly playerRadius = WORLD_CONFIG.player.radius,
+    private readonly resolveWalls?: (from: Point, target: Point) => Point,
   ) {
     const keyboard = scene.input.keyboard;
     if (keyboard) {
@@ -72,6 +73,7 @@ export class MovementSystem {
   /** Считает новую позицию за dtSeconds с учётом границ мира и препятствий. */
   step(pos: Point, dtSeconds: number): Point {
     this.direction = this.readDirection();
+    if (this.direction.x === 0 && this.direction.y === 0) return pos;
     let x = pos.x + this.direction.x * this.speed * dtSeconds;
     let y = pos.y + this.direction.y * this.speed * dtSeconds;
 
@@ -90,10 +92,11 @@ export class MovementSystem {
       }
     }
 
-    return {
+    const target = {
       x: Phaser.Math.Clamp(x, this.bounds.minX, this.bounds.maxX),
       y: Phaser.Math.Clamp(y, this.bounds.minY, this.bounds.maxY),
     };
+    return this.resolveWalls?.(pos, target) ?? target;
   }
 
   destroy(): void {

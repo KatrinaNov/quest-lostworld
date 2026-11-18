@@ -45,7 +45,7 @@ export class PlayerAvatar extends Phaser.GameObjects.Container {
   private samples: PositionSample[];
   /** Получена ли хотя бы одна «живая» позиция по Broadcast (первая ставится без анимации). */
   private gotLivePosition = false;
-  private readonly keyBadge: Phaser.GameObjects.Image;
+  private readonly keyBadge: Phaser.GameObjects.Image | null;
   private keyVisible = false;
 
   constructor(scene: Phaser.Scene, player: Player, isLocal: boolean) {
@@ -81,11 +81,9 @@ export class PlayerAvatar extends Phaser.GameObjects.Container {
       })
       .setOrigin(0.5, 1);
 
-    this.keyBadge = scene.add
-      .image(22, -42, TEXTURES.questKeyOrange)
-      .setScale(0.035)
-      .setVisible(false)
-      .setDepth(9999);
+    this.keyBadge = scene.textures.exists(TEXTURES.questKeyOrange)
+      ? scene.add.image(22, -42, TEXTURES.questKeyOrange).setScale(0.07).setVisible(false).setDepth(9999)
+      : null;
 
     if (isLocal) {
       this.arrow = scene.add.graphics();
@@ -97,7 +95,8 @@ export class PlayerAvatar extends Phaser.GameObjects.Container {
 
     const children: Phaser.GameObjects.GameObject[] = [shadow];
     if (this.ring) children.push(this.ring);
-    children.push(this.visual, this.label, this.keyBadge);
+    children.push(this.visual, this.label);
+    if (this.keyBadge) children.push(this.keyBadge);
     if (this.arrow) children.push(this.arrow);
     this.add(children);
 
@@ -113,8 +112,7 @@ export class PlayerAvatar extends Phaser.GameObjects.Container {
   setKeyFound(found: boolean): void {
     if (found === this.keyVisible) return;
     this.keyVisible = found;
-    this.keyBadge.setVisible(found);
-    this.keyBadge.clearTint();
+    this.keyBadge?.setVisible(found).clearTint();
   }
 
   setIdentity(name: string, color: number): void {

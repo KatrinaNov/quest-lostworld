@@ -1,6 +1,6 @@
 import './styles/main.css';
 import { isSupabaseConfigured } from './config/appConfig';
-import { createGame, type GameHandle } from './game/createGame';
+import type { GameHandle } from './game/createGame';
 import { WORLD_CONFIG } from './game/config/worldConfig';
 import { createRoom, joinRoom } from './network/roomService';
 import type { Point, RoomSession } from './network/types';
@@ -38,12 +38,9 @@ function requestMobileFullscreen(): void {
 }
 
 /** Публичный тестовый вход: пропускает путь до храма, но не подменяет комнату или Supabase. */
-function startsAtTempleForTesting(): boolean {
-  return new URLSearchParams(window.location.search).get('test') === 'temple';
-}
-
-function startsAtMazeForTesting(): boolean {
-  return new URLSearchParams(window.location.search).get('test') === 'maze';
+function testLocation(): 'temple' | 'maze' | null {
+  const location = new URLSearchParams(window.location.search).get('test');
+  return location === 'temple' || location === 'maze' ? location : null;
 }
 
 /**
@@ -77,14 +74,16 @@ class App {
     this.lobby = new Lobby(this.uiRoot, {
       onCreate: async (name) => {
         requestMobileFullscreen();
+        const { createGame } = await import('./game/createGame');
         const room = await createRoom(name, spawnForSlot);
-        this.enterGame(room);
+        this.enterGame(room, createGame);
         this.notifications.show(`Комната создана. Код: ${room.roomCode}`, 'success', 5000);
       },
       onJoin: async (name, code) => {
         requestMobileFullscreen();
+        const { createGame } = await import('./game/createGame');
         const room = await joinRoom(name, code, spawnForSlot);
-        this.enterGame(room);
+        this.enterGame(room, createGame);
         this.notifications.show(`Вы в комнате ${room.roomCode}`, 'success');
       },
     });
@@ -98,16 +97,12 @@ class App {
     }
 
     if (import.meta.env.DEV && new URLSearchParams(window.location.search).get('demo') === '1') {
-      void import('./dev/devPreview').then(({ parseDevPreview }) =>
-        import('./dev/demoRoom').then(({ DemoRoom }) => {
-          const preview = parseDevPreview();
-          this.enterGame(new DemoRoom('Тестер', preview));
-        }),
-      );
+      void Promise.all([import('./dev/devPreview'), import('./dev/demoRoom'), import('./game/createGame')])
+        .then(([preview, demo, game]) => this.enterGame(new demo.DemoRoom('Тестер', preview.parseDevPreview()), game.createGame));
     }
 
-    window.addEventListener('pagehide', () => {
-      void this.room?.leave();
+    window.addEventListener('pagehide', (event) => {
+      if (!event.persisted) void this.room?.leave();
     });
     // После сна Android/Chrome может сам выйти из Fullscreen API и показать URL-строку.
     // Браузер разрешит вернуть fullscreen только по следующему касанию пользователя.
@@ -137,13 +132,14 @@ class App {
     if (this.room && isMobileDevice() && !isStandalone()) void enterFullscreen();
   };
 
-  private enterGame(room: RoomSession): void {
+  private enterGame(room: RoomSession, createGame: typeof import('./game/createGame').createGame): void {
     this.room = room;
     this.leaving = false;
-    // MinecraftScene уже умеет безопасно передать игрока в TempleScene по этому ключу.
-    // Код комнаты входит в значение, поэтому тестовый переход не затрагивает другие комнаты.
-    if (startsAtTempleForTesting()) sessionStorage.setItem('temple-room', room.roomCode);
-    if (startsAtMazeForTesting()) sessionStorage.setItem('maze-room', room.roomCode);
+    const location = testLocation();
+    if (location) sessionStorage.setItem(`${location}-room`, room.roomCode);
+    if (location === 'temple' && sessionStorage.getItem('maze-room') === room.roomCode) {
+      sessionStorage.removeItem('maze-room');
+    }
     this.lobby.hide();
     this.setMode('game');
 

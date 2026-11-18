@@ -9,6 +9,7 @@ import { REGISTRY_KEYS } from './WorldScene';
 import { SCENE_KEYS } from './BootScene';
 import type { TempleQuestState } from '../quest/templeQuestTypes';
 import type { TempleQuestHud } from '../../ui/TempleQuestHud';
+import type { QuestHud } from '../../ui/QuestHud';
 
 /** Локация 3: самостоятельная Arcade Physics сцена, не использующая top-down движение. */
 export class TempleScene extends Phaser.Scene {
@@ -28,8 +29,10 @@ export class TempleScene extends Phaser.Scene {
   private readonly pendingStars = new Set<number>();
   private finalAnimating = false;
   private finalRevealRequested = false;
+  private finalAnimationPlayed = false;
   private hintShown = false;
-  private doorButton: Phaser.GameObjects.Text | null = null;
+  private questHud: QuestHud | null = null;
+  private transitionQueued = false;
 
   constructor() { super(SCENE_KEYS.temple); }
 
@@ -54,7 +57,8 @@ export class TempleScene extends Phaser.Scene {
     this.physics.add.collider(this.player, this.world.door);
     for (const falling of this.world.falling) this.physics.add.collider(this.player, falling.body, () => { if (this.playerBody.touching.down && this.player.y < falling.body.y) falling.activate(); });
     this.setupCamera();
-    this.createDoorButton();
+    this.questHud = this.registry.get(REGISTRY_KEYS.questHud) as QuestHud | null;
+    this.questHud?.bindScene(this);
     this.syncPlayers(this.bridge.getPlayers());
     this.off.push(
       this.bridge.on('players', (players) => this.syncPlayers(players)),
@@ -67,6 +71,7 @@ export class TempleScene extends Phaser.Scene {
 
   override update(time: number, delta: number): void {
     if (!this.respawning && !this.finalAnimating && !this.hud?.isOpen()) this.platformInput.step(this.playerBody, Math.min(delta, 100));
+    else this.playerBody.setVelocityX(0);
     for (const falling of this.world.falling) falling.update(time);
     for (const chain of this.world.lavaChains) chain.update(time);
     for (const lava of this.world.lavaVisuals) lava.update(time);
@@ -135,6 +140,14 @@ export class TempleScene extends Phaser.Scene {
     }
   }
   private applyTempleState(state: TempleQuestState): void {
+    if (state.phase === 'transitioned') {
+      if (!this.transitionQueued) {
+        this.transitionQueued = true;
+        sessionStorage.setItem('maze-room', this.bridge.roomCode);
+        this.scene.start(SCENE_KEYS.labyrinth);
+      }
+      return;
+    }
     this.world.setPlateAssignments(state.team);
     this.hud?.setProgress(state);
     const self = state.players[this.bridge.self.id];
@@ -155,34 +168,27 @@ export class TempleScene extends Phaser.Scene {
       plate.body.setStrokeStyle(active ? 3 : 0, active ? 0xffffff : 0x000000, active ? 0.9 : 0);
     }
     if (state.phase === 'final_started') this.runFinalAnimation();
-    if ((state.phase === 'hint_ready' || state.phase === 'transitioned') && !this.doorShown) {
+    if (state.phase === 'hint_ready' && !this.doorShown) {
       this.doorShown = true; this.world.openDoor(); this.notify('ИСПЫТАНИЕ ПРОЙДЕНО!', 'success');
     }
     if (state.phase === 'hint_ready' && !this.hintShown) { this.hintShown = true; this.hud?.showHint(() => undefined); }
-    if (state.phase === 'transitioned') this.scene.start(SCENE_KEYS.labyrinth);
-  }
-  private createDoorButton(): void {
-    this.doorButton = this.add.text(this.scale.width - 76, 26, 'Войти', {
-      fontFamily: 'monospace', fontSize: '17px', color: '#fff5dc', backgroundColor: '#1b222b', padding: { x: 14, y: 8 },
-    }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(90).setInteractive({ useHandCursor: true }).setVisible(false);
-    this.doorButton.on('pointerup', () => this.openDoorDialog());
   }
   private updateDoorButton(): void {
-    if (!this.doorButton) return;
     const ready = this.bridge.getTempleQuestState().phase === 'hint_ready';
     const near = Math.abs(this.player.x - 13670) < 110 && Math.abs(this.player.y - 560) < 150;
-    this.doorButton.setVisible(ready && near && !this.hud?.isOpen());
-    this.doorButton.setPosition(this.scale.width - 76, 26);
+    const visible = ready && near && !this.respawning && !this.finalAnimating && !this.hud?.isOpen();
+    this.questHud?.setActionAtWorld(13670, 548, visible ? 'Войти' : null, visible ? this.openDoorDialog : null);
   }
-  private openDoorDialog(): void {
+  private readonly openDoorDialog = (): void => {
     if (this.bridge.getTempleQuestState().phase !== 'hint_ready' || this.hud?.isOpen()) return;
     this.hud?.showDoorConfirm(
       () => this.hud?.showHint(() => undefined),
       () => void this.bridge.templeTransition().catch(() => this.notify('Не удалось перейти дальше.', 'warn')),
     );
-  }
+  };
   private runFinalAnimation(): void {
-    if (this.finalAnimating || this.bridge.getTempleQuestState().phase !== 'final_started') return;
+    if (this.finalAnimationPlayed || this.bridge.getTempleQuestState().phase !== 'final_started') return;
+    this.finalAnimationPlayed = true;
     this.finalAnimating = true;
     this.playerBody.setVelocity(0, 0);
     const width = this.scale.width;
@@ -253,7 +259,9 @@ export class TempleScene extends Phaser.Scene {
     for (const chain of this.world.lavaChains) chain.destroy();
     for (const lava of this.world.lavaVisuals) lava.destroy();
     for (const star of this.world.stars) star.destroy();
-    this.doorButton?.destroy(); this.doorButton = null;
+    this.questHud?.clearWorldUi();
+    this.questHud?.bindScene(null);
+    this.questHud = null;
     this.hud?.hide(); this.hud = null;
   }
   private notify(message: string, type: 'info' | 'success' | 'warn'): void {
