@@ -37,6 +37,11 @@ function requestMobileFullscreen(): void {
   if (isMobileDevice() && !isStandalone()) void enterFullscreen();
 }
 
+/** Публичный тестовый вход: пропускает путь до храма, но не подменяет комнату или Supabase. */
+function startsAtTempleForTesting(): boolean {
+  return new URLSearchParams(window.location.search).get('test') === 'temple';
+}
+
 /**
  * Единственное место, где соединяются UI, сеть и игра.
  * Сцены Phaser о сети не знают, сетевой слой — об интерфейсе и сценах.
@@ -131,6 +136,9 @@ class App {
   private enterGame(room: RoomSession): void {
     this.room = room;
     this.leaving = false;
+    // MinecraftScene уже умеет безопасно передать игрока в TempleScene по этому ключу.
+    // Код комнаты входит в значение, поэтому тестовый переход не затрагивает другие комнаты.
+    if (startsAtTempleForTesting()) sessionStorage.setItem('temple-room', room.roomCode);
     this.lobby.hide();
     this.setMode('game');
 
