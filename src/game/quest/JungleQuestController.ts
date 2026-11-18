@@ -43,6 +43,9 @@ export class JungleQuestController {
 
   destroy(): void {
     for (const stop of this.off) stop();
+    // Кнопка привязана к DOM-HUD, а не к сцене Phaser: без явной очистки она
+    // могла остаться поверх уже открывшегося храма.
+    this.ui.setActionAtWorld(0, 0, null, null);
     this.ui.closeJungleModal();
   }
 
@@ -125,6 +128,21 @@ export class JungleQuestController {
 
   private presentState(): void {
     this.ui.setJungleProgress(this.state);
+    // terminal-состояние должно заменить любое открытое локальное окно. Иначе
+    // у второго игрока оставалось поле секретного слова после успеха первого.
+    if (this.state.phase === 'temple_open') {
+      if (this.modalOpen) {
+        this.modalOpen = false;
+        this.ui.closeJungleModal();
+      }
+      if (!this.templeShown) {
+        this.templeShown = true;
+        this.openTemplePassage();
+        this.modalOpen = true;
+        this.ui.showJungleTempleOpen(() => { this.modalOpen = false; });
+      }
+      return;
+    }
     if (this.modalOpen) return;
     if (this.state.phase === 'message_ready' && !this.completionShown) {
       this.completionShown = true;
@@ -137,12 +155,6 @@ export class JungleQuestController {
       this.modalOpen = true;
       this.ui.showJungleSecret((value) => this.submitSecret(value));
       return;
-    }
-    if (this.state.phase === 'temple_open' && !this.templeShown) {
-      this.templeShown = true;
-      this.openTemplePassage();
-      this.modalOpen = true;
-      this.ui.showJungleTempleOpen(() => { this.modalOpen = false; });
     }
   }
 
