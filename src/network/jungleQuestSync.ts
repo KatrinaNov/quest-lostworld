@@ -40,7 +40,9 @@ export class JungleQuestSync extends Emitter<JungleEvents> {
         { event: '*', schema: 'public', table: 'jungle_quest_states', filter: `room_code=eq.${this.roomCode}` },
         ({ new: row }) => this.ingestRow(row),
       );
-    this.channel.subscribe();
+    this.channel.subscribe((status) => {
+      if (status === 'SUBSCRIBED') void this.refresh().catch(() => undefined);
+    });
   }
 
   async refresh(): Promise<void> {

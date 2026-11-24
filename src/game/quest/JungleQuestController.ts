@@ -166,10 +166,6 @@ export class JungleQuestController {
     if (this.state.phase === 'temple_open') {
       if (this.templeShown) return;
       this.templeShown = true;
-      if (this.modalOpen) {
-        this.modalOpen = false;
-        this.ui.closeJungleModal();
-      }
       this.openTemplePassage();
       this.modalOpen = true;
       this.ui.showJungleTempleOpen(() => { this.modalOpen = false; });
@@ -196,20 +192,19 @@ export class JungleQuestController {
     } catch {
       this.ui.notify('Не удалось подтвердить послание. Попробуйте ещё раз.', 'warn');
     } finally {
-      this.modalOpen = false;
-      this.presentState();
+      if (!this.templeShown) {
+        this.modalOpen = false;
+        if (this.state.phase === 'message_ready') this.completionShown = false;
+        this.presentState();
+      }
     }
   }
 
   private async submitSecret(value: string): Promise<'wrong' | 'opened' | 'ignored'> {
     try {
       const result = await this.bridge.jungleSubmitSecret(value);
-      if (result === 'opened') {
-        this.modalOpen = false;
-        this.ui.closeJungleModal();
-        this.presentState();
-        return 'opened';
-      }
+      // Серверное состояние уже обновляет окно у всех, включая отправителя.
+      if (result === 'opened') return 'opened';
       return result === 'wrong' ? 'wrong' : 'ignored';
     } catch {
       this.ui.notify('Не удалось проверить слово. Проверьте соединение.', 'warn');

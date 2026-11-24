@@ -6,7 +6,6 @@ export class JungleQuestHud {
   private readonly progress: HTMLElement;
   private readonly backdrop: HTMLElement;
   private readonly dialog: HTMLElement;
-  private onClose: (() => void) | null = null;
 
   constructor(parent: HTMLElement) {
     this.progress = document.createElement('section');
@@ -57,17 +56,20 @@ export class JungleQuestHud {
 
   showCompletion(onConfirm: () => void): void {
     this.open(
-      'ТРИ СИМВОЛА СОЕДИНЕНЫ!',
-      '<div class="jungle-three-leaves">❧ ❧ ❧</div><p>Джунгли признали вас достойными продолжить путь.</p><p>Но предыдущая команда оставила последнее послание не в игре.</p><p>Найдите в настоящем мире знак с тремя листьями. Там вас ждёт следующее испытание.</p>',
-      'Я нашёл послание',
+      'СЛЕД ПРЕЖНИХ ИСКАТЕЛЕЙ',
+      `<div class="jungle-three-leaves" aria-label="Знак трёх листьев">❧ ❧ ❧</div>
+      <p>Прежние искатели клада спрятали в вашем мире четыре конверта. Каждый отмечен тремя листьями.</p>
+      <p><em>Не солнце, а тьму прогоняю.<br>Стою на месте, а путь освещаю. Кто я?</em></p>
+      <p>Ищите конверты рядом с отгадкой. Соберите все четыре подсказки и разгадайте заветное слово.</p>`,
+      'Мы нашли конверты',
       onConfirm,
     );
   }
 
   showSecret(onSubmit: (value: string) => Promise<'wrong' | 'opened' | 'ignored'>): void {
     this.dialog.innerHTML = `
-      <h2 class="legend-title">ПОСЛАНИЕ НАЙДЕНО</h2>
-      <div class="legend-body"><p>Вы нашли послание предыдущей команды! Кажется, они оставили вам способ открыть путь дальше.</p></div>
+      <h2 class="legend-title">СЛОВО ИСКАТЕЛЕЙ</h2>
+      <div class="legend-body"><p>Разгадайте слово из четырёх конвертов и введите его, чтобы открыть храм.</p></div>
       <input class="jungle-secret" aria-label="Секретное слово" placeholder="Введите секретное слово" autocomplete="off" autocapitalize="characters" />
       <p class="jungle-secret-error" hidden></p>
       <button type="button" class="legend-start">Проверить</button>`;
@@ -75,11 +77,12 @@ export class JungleQuestHud {
     const error = this.dialog.querySelector('.jungle-secret-error') as HTMLElement;
     const button = this.dialog.querySelector('.legend-start') as HTMLButtonElement;
     const submit = async (): Promise<void> => {
+      if (button.disabled) return;
       button.disabled = true;
       const result = await onSubmit(input.value);
       button.disabled = false;
-      if (result === 'wrong') {
-        error.textContent = 'Не получилось. Проверьте порядок предметов и попробуйте ещё раз';
+      if (result === 'wrong' && input.isConnected) {
+        error.textContent = 'Сверьтесь с подсказками из конвертов и попробуйте ещё раз.';
         error.hidden = false;
         input.focus();
       }
@@ -92,8 +95,8 @@ export class JungleQuestHud {
 
   showTempleOpen(onClose: () => void): void {
     this.open(
-      'ПУТЬ К ХРАМУ ОТКРЫТ',
-      '<p>Вы нашли послание предыдущей команды!</p><p>Путь к храму открыт.</p><p>Но будьте осторожны: вы не единственные, кто ищет сокровище. Где-то поблизости уже появились охотники.</p><p>Следующий мир ждёт вас!</p>',
+      'ХРАМ ОТКРЫТ',
+      '<p>Вы разгадали послание прежних искателей. Теперь путь к кладу лежит через храм.</p><p>Подойдите к храму на карте джунглей и нажмите «Войти в храм».</p>',
       'Продолжить',
       onClose,
     );
@@ -102,9 +105,6 @@ export class JungleQuestHud {
   close(): void {
     this.backdrop.hidden = true;
     document.body.classList.remove('modal-open');
-    const close = this.onClose;
-    this.onClose = null;
-    close?.();
   }
 
   hide(): void {
@@ -124,8 +124,10 @@ export class JungleQuestHud {
     this.dialog.querySelector('.legend-body')!.innerHTML = body;
     const button = this.dialog.querySelector('.legend-start') as HTMLButtonElement;
     button.textContent = buttonText;
-    button.addEventListener('click', () => this.close());
-    this.onClose = onClose;
+    button.addEventListener('click', () => {
+      this.close();
+      onClose();
+    });
     this.show();
   }
 

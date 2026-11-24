@@ -1,7 +1,6 @@
 import type { Point } from '../../network/types';
 
-/** Заполняется организатором перед игрой — место нельзя угадывать в коде. */
-export const TEMPLE_MAP_LOCATION_HINT = '[МЕСТО_КАРТЫ]';
+export const TEMPLE_MAP_LOCATION_HINT = 'в библиотеке';
 
 /** Отдельные параметры сцены-платформера. Top-down конфигурации не затрагиваются. */
 export const TEMPLE_CONFIG = {
