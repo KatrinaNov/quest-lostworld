@@ -60,6 +60,7 @@ export type RoomMode = 'create' | 'join' | 'resume';
 
 export type GameErrorCode =
   | 'config'
+  | 'assets'
   | 'auth'
   | 'invalid_name'
   | 'invalid_code'

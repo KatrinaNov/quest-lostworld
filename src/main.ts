@@ -3,6 +3,7 @@ import { isSupabaseConfigured } from './config/appConfig';
 import type { GameHandle } from './game/createGame';
 import { WORLD_CONFIG } from './game/config/worldConfig';
 import { createRoom, getResumableRoomCode, joinRoom, rememberRoomCode } from './network/roomService';
+import { GameError } from './network/types';
 import type { Point, RoomSession } from './network/types';
 import { enterFullscreen, isFullscreen, isFullscreenSupported, isMobileDevice, isStandalone, toggleFullscreen } from './ui/Fullscreen';
 import type { QuestUiHost } from './game/quest/IslandQuestController';
@@ -20,6 +21,28 @@ function requireById(id: string): HTMLElement {
   const el = document.getElementById(id);
   if (!el) throw new Error(`Не найден элемент #${id}`);
   return el;
+}
+
+const GAME_REFRESH_PARAM = 'game-refresh';
+
+async function loadGame(roomCode?: string): Promise<typeof import('./game/createGame')> {
+  const url = new URL(window.location.href);
+  const game = await import('./game/createGame').catch((error: unknown) => {
+    console.error('Не удалось загрузить файлы игры', error);
+    if (import.meta.env.PROD && navigator.onLine && !url.searchParams.has(GAME_REFRESH_PARAM)) {
+      // GitHub Pages can keep the old HTML cached after its hashed game bundle is removed.
+      url.searchParams.set(GAME_REFRESH_PARAM, Date.now().toString(36));
+      if (roomCode) url.searchParams.set('room', roomCode);
+      window.location.replace(url.href);
+      throw new GameError('assets', 'Обновляем файлы игры…');
+    }
+    throw new GameError('assets', 'Не удалось загрузить файлы игры. Проверьте интернет и обновите страницу.');
+  });
+  if (url.searchParams.has(GAME_REFRESH_PARAM)) {
+    url.searchParams.delete(GAME_REFRESH_PARAM);
+    window.history.replaceState(window.history.state, '', url.href);
+  }
+  return game;
 }
 
 /** Стартовая точка игрока по номеру слота в комнате. */
@@ -68,14 +91,14 @@ class App {
     this.lobby = new Lobby(this.uiRoot, {
       onCreate: async (name) => {
         this.requestMobileFullscreen();
-        const { createGame } = await import('./game/createGame');
+        const { createGame } = await loadGame();
         const room = await createRoom(name, spawnForSlot);
         this.enterGame(room, createGame);
         this.notifications.show(`Комната создана. Код: ${room.roomCode}`, 'success', 5000);
       },
       onJoin: async (name, code) => {
         this.requestMobileFullscreen();
-        const { createGame } = await import('./game/createGame');
+        const { createGame } = await loadGame(code);
         const room = await joinRoom(name, code, spawnForSlot);
         this.enterGame(room, createGame);
         this.notifications.show(`Вы в комнате ${room.roomCode}`, 'success');
