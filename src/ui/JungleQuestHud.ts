@@ -88,7 +88,10 @@ export class JungleQuestHud {
       }
     };
     button.addEventListener('click', () => void submit());
-    input.addEventListener('keydown', (event) => { if (event.key === 'Enter') void submit(); });
+    input.addEventListener('keydown', (event) => {
+      event.stopPropagation();
+      if (event.key === 'Enter') void submit();
+    });
     this.show();
     input.focus();
   }

@@ -1173,6 +1173,58 @@ body.modal-open .joystick-zone {
   pointer-events: none !important;
 }
 
+/* The phone keyboard can shrink only the visual viewport, leaving the game canvas at full size. */
+.app--keyboard :is(.lobby, .legend-backdrop) {
+  top: var(--keyboard-viewport-top);
+  bottom: auto;
+  height: var(--keyboard-viewport-height);
+  align-items: flex-start;
+  padding-block: calc(var(--sat) + 4px) 3px;
+}
+
+.app--keyboard .lobby-card {
+  margin-block: 0;
+  gap: 5px 14px;
+  padding: 8px 12px;
+}
+
+.app--keyboard .lobby-intro { justify-content: start; }
+.app--keyboard :is(.lobby-emblem, .lobby-title, .lobby-sub, .lobby-hint, .lobby-divider, .lobby-status:empty) { display: none; }
+.app--keyboard .lobby :is(.field input, .btn) { padding-block: 8px; }
+
+@media (min-width: 520px) {
+  .app--keyboard .lobby-card { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .app--keyboard :is(.lobby-intro, .lobby-actions) { display: contents; }
+  .app--keyboard .lobby-intro > .field { grid-area: 1 / 1; }
+  .app--keyboard .lobby-actions > .field { grid-area: 1 / 2; }
+  .app--keyboard #lobby-create { grid-area: 2 / 1; }
+  .app--keyboard #lobby-join { grid-area: 2 / 2; }
+}
+
+.app--keyboard .legend-modal {
+  max-height: 100%;
+  padding-block: 6px 7px;
+  overscroll-behavior: contain;
+}
+
+.app--keyboard .legend-modal::before,
+.app--keyboard .legend-title::after { display: none; }
+
+.app--keyboard .legend-title {
+  margin-bottom: 6px;
+  font-size: clamp(18px, 4vw, 23px);
+}
+
+.app--keyboard .legend-body {
+  flex-shrink: 0;
+  overflow: visible;
+  margin-bottom: 6px;
+}
+
+.app--keyboard .legend-start { min-height: 44px; padding-block: 8px; }
+.app--keyboard :is(.jungle-secret, .maze-code) { min-height: 44px; margin-block: 0 5px; }
+.app--keyboard .castle-fields { margin-block: 4px; }
+
 .world-interact {
   position: fixed;
   z-index: 56;

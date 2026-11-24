@@ -9,6 +9,7 @@ import type { QuestUiHost } from './game/quest/IslandQuestController';
 import { Hud } from './ui/Hud';
 import { LegendModal } from './ui/LegendModal';
 import { Lobby } from './ui/Lobby';
+import { keepMobileFieldsVisible } from './ui/mobileKeyboardViewport';
 import { MobileControls } from './ui/MobileControls';
 import { Notifications } from './ui/Notifications';
 import { QuestHud } from './ui/QuestHud';
@@ -63,6 +64,7 @@ class App {
   private restoreFullscreenOnTap = false;
 
   constructor() {
+    keepMobileFieldsVisible(this.appEl);
     this.lobby = new Lobby(this.uiRoot, {
       onCreate: async (name) => {
         this.requestMobileFullscreen();
@@ -129,7 +131,7 @@ class App {
   };
 
   private readonly restoreFullscreenAfterWake = (event: Event): void => {
-    if (!this.restoreFullscreenOnTap) return;
+    if (!this.restoreFullscreenOnTap || this.appEl.classList.contains('app--keyboard')) return;
     if (event.target instanceof Element && event.target.closest('.hud-fs, input, textarea, select')) return;
     if (navigator.userActivation && !navigator.userActivation.isActive) return;
     this.restoreFullscreenOnTap = false;
