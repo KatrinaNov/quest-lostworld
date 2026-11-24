@@ -10,6 +10,9 @@ type Stage = 'exploring' | 'assembly' | 'waiting' | 'code';
 
 export class MazeQuestHud {
   private readonly progress: HTMLElement;
+  private readonly gateNotice: HTMLElement;
+  private readonly gateText: HTMLElement;
+  private readonly loadingTiles: HTMLElement;
   private readonly backdrop: HTMLElement;
   private readonly dialog: HTMLElement;
   private readonly dragPreview: HTMLElement;
@@ -24,6 +27,13 @@ export class MazeQuestHud {
   constructor(parent: HTMLElement, private readonly actions: MazeActions) {
     this.progress = document.createElement('section');
     this.progress.className = 'maze-progress';
+    this.gateNotice = document.createElement('aside');
+    this.gateNotice.className = 'maze-gate-status';
+    this.gateNotice.hidden = true;
+    this.gateNotice.setAttribute('role', 'status');
+    this.gateNotice.innerHTML = '<span class="maze-loading-tiles" aria-hidden="true" hidden><i></i><i></i><i></i></span><span></span>';
+    this.loadingTiles = this.gateNotice.firstElementChild as HTMLElement;
+    this.gateText = this.gateNotice.lastElementChild as HTMLElement;
     this.backdrop = document.createElement('div');
     this.backdrop.className = 'legend-backdrop';
     this.backdrop.hidden = true;
@@ -37,7 +47,7 @@ export class MazeQuestHud {
     this.dragPreview.setAttribute('aria-hidden', 'true');
     this.dragPreview.hidden = true;
     this.backdrop.append(this.dialog, this.dragPreview);
-    parent.append(this.progress, this.backdrop);
+    parent.append(this.progress, this.gateNotice, this.backdrop);
 
     for (let i = this.bankOrder.length - 1; i > 0; i -= 1) {
       const j = Math.floor(Math.random() * (i + 1));
@@ -71,10 +81,17 @@ export class MazeQuestHud {
     if (this.stage !== 'assembly') this.showAssembly();
   }
 
+  setGateNotice(text: string | null, loading = false): void {
+    if (this.gateNotice.hidden !== !text) this.gateNotice.hidden = !text;
+    if (text !== null && this.gateText.textContent !== text) this.gateText.textContent = text;
+    if (this.loadingTiles.hidden === loading) this.loadingTiles.hidden = !loading;
+  }
+
   destroy(): void {
     if (!this.backdrop.hidden) document.body.classList.remove('modal-open');
     this.backdrop.remove();
     this.progress.remove();
+    this.gateNotice.remove();
   }
 
   private showAssembly(): void {

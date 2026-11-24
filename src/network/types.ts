@@ -138,6 +138,7 @@ export interface GameBridge {
   getMazeQuestState(): import('../game/quest/mazeQuestTypes').MazeQuestState;
   isMazeQuestReady(): boolean;
   mazeStart(): Promise<void>;
+  mazeRefresh(): Promise<void>;
   mazeSaveCheckpoint(index: number): Promise<import('../game/quest/mazeQuestTypes').MazeResult>;
   mazeCollectLetter(index: number): Promise<import('../game/quest/mazeQuestTypes').MazeResult>;
   mazeArrive(): Promise<import('../game/quest/mazeQuestTypes').MazeResult>;

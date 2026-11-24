@@ -1,11 +1,10 @@
 import Phaser from 'phaser';
-import { MAZE_CONFIG, MAZE_LETTER_POINTS, MAZE_PALETTE } from '../config/mazeConfig';
+import { MAZE_CONFIG, MAZE_LETTER_POINTS, MAZE_PALETTE, MAZE_TERRAIN_SCALE } from '../config/mazeConfig';
 import { MAZE_GLYPHS } from '../quest/mazeQuestTypes';
-import { createRng } from '../config/worldConfig';
+import terrainUrl from './maze-terrain.png';
 import { MAZE_HAZARDS, MAZE_SCALE, MAZE_WALLS, mazePoint } from './mazeLayout';
 
 const TERRAIN_TEXTURE = 'labyrinth-stone-and-hedges';
-const TERRAIN_SCALE = 2;
 
 export interface MazeHazard {
   sprite: Phaser.GameObjects.Container;
@@ -41,87 +40,25 @@ export function buildMazeWorld(scene: Phaser.Scene): {
   return { hazards, checkpoints, letters };
 }
 
+export function preloadMazeTerrain(scene: Phaser.Scene): void {
+  if (!scene.textures.exists(TERRAIN_TEXTURE)) scene.load.image(TERRAIN_TEXTURE, terrainUrl);
+}
+
 function addTerrain(scene: Phaser.Scene): void {
-  if (!scene.textures.exists(TERRAIN_TEXTURE)) {
-    const width = Math.ceil(MAZE_CONFIG.width / TERRAIN_SCALE);
-    const height = Math.ceil(MAZE_CONFIG.height / TERRAIN_SCALE);
-    const texture = scene.textures.createCanvas(TERRAIN_TEXTURE, width, height);
-    if (!texture) throw new Error('Unable to create maze terrain texture');
-
-    drawStoneFloor(texture.context, width, height);
-    drawHedges(texture.context);
-    texture.refresh();
-    texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
+  if (scene.textures.exists(TERRAIN_TEXTURE)) {
+    scene.textures.get(TERRAIN_TEXTURE).setFilter(Phaser.Textures.FilterMode.NEAREST);
+    scene.add.image(0, 0, TERRAIN_TEXTURE).setOrigin(0).setScale(MAZE_TERRAIN_SCALE).setDepth(-20);
+    return;
   }
-  scene.add.image(0, 0, TERRAIN_TEXTURE).setOrigin(0).setScale(TERRAIN_SCALE).setDepth(-20);
-}
 
-function drawStoneFloor(ctx: CanvasRenderingContext2D, width: number, height: number): void {
-  const random = createRng(4957);
-  const rowHeight = 26;
-  const { stoneJoint, stoneSlabs, stoneLight, stoneShade } = MAZE_PALETTE;
-  ctx.fillStyle = stoneJoint;
-  ctx.fillRect(0, 0, width, height);
-  for (let y = 0; y < height; y += rowHeight) {
-    for (let x = -Math.floor(random() * 40); x < width;) {
-      const slabWidth = 31 + Math.floor(random() * 29);
-      const slabHeight = rowHeight - 2;
-      ctx.fillStyle = stoneSlabs[Math.floor(random() * stoneSlabs.length)];
-      ctx.fillRect(x + 2, y, slabWidth - 5, slabHeight);
-      ctx.fillRect(x, y + 2, slabWidth - 2, slabHeight - 4);
-      ctx.fillStyle = stoneLight;
-      ctx.fillRect(x + 3, y + 1, slabWidth - 8, 2);
-      ctx.fillRect(x + 1, y + 4, 1, slabHeight - 8);
-      ctx.fillStyle = stoneShade;
-      ctx.fillRect(x + 3, y + slabHeight - 2, slabWidth - 8, 2);
-      ctx.fillRect(x + 6 + Math.floor(random() * (slabWidth - 16)), y + 8 + Math.floor(random() * 9), 4, 1);
-      if (random() < 0.28) {
-        const crackX = x + slabWidth - 13;
-        ctx.fillRect(crackX, y + 3, 1, 6);
-        ctx.fillRect(crackX - 3, y + 8, 4, 1);
-        ctx.fillRect(crackX - 3, y + 9, 1, 4);
-      }
-      x += slabWidth;
-    }
+  // If the image is unavailable, draw the same layout as the collision geometry.
+  const terrain = scene.add.graphics().setDepth(-20);
+  terrain.fillStyle(Phaser.Display.Color.HexStringToColor(MAZE_PALETTE.stoneJoint).color)
+    .fillRect(0, 0, MAZE_CONFIG.width, MAZE_CONFIG.height);
+  terrain.fillStyle(Phaser.Display.Color.HexStringToColor(MAZE_PALETTE.hedgeBase).color);
+  for (const wall of MAZE_WALLS) {
+    terrain.fillRect(wall.left, wall.top, wall.right - wall.left, wall.bottom - wall.top);
   }
-}
-
-function drawHedges(ctx: CanvasRenderingContext2D): void {
-  const random = createRng(8209);
-  const { hedgeShadow, hedgeBase, hedgeLeaves, hedgeTips } = MAZE_PALETTE;
-  const walls = MAZE_WALLS.map(({ left, top, right, bottom }) => ({
-    x: left / TERRAIN_SCALE, y: top / TERRAIN_SCALE,
-    w: (right - left) / TERRAIN_SCALE, h: (bottom - top) / TERRAIN_SCALE,
-  }));
-  ctx.save();
-  ctx.beginPath();
-  for (const { x, y, w, h } of walls) ctx.rect(x, y, w, h);
-  ctx.clip();
-  ctx.fillStyle = hedgeShadow;
-  ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-  ctx.fillStyle = hedgeBase;
-  for (const { x, y, w, h } of walls) ctx.fillRect(x + 1, y + 1, w - 2, h - 3);
-
-  for (const { x, y, w, h } of walls) {
-    const horizontal = w >= h;
-    const length = horizontal ? w : h;
-    for (let offset = 2; offset < length; offset += 5 + Math.floor(random() * 4)) {
-      const across = 3 + Math.floor(random() * 8);
-      const leafX = x + (horizontal ? offset : across);
-      const leafY = y + (horizontal ? across : offset);
-      const size = 4 + Math.floor(random() * 5);
-      ctx.fillStyle = hedgeShadow;
-      ctx.fillRect(leafX - 2, leafY + 1, size + 1, 3);
-      ctx.fillStyle = hedgeLeaves[Math.floor(random() * hedgeLeaves.length)];
-      ctx.fillRect(leafX - 3, leafY - 1, size + 1, 3);
-      ctx.fillRect(leafX - 1, leafY - 3, size - 2, 5);
-      if (random() < 0.55) {
-        ctx.fillStyle = hedgeTips;
-        ctx.fillRect(leafX - 1, leafY - 2, 2, 1);
-      }
-    }
-  }
-  ctx.restore();
 }
 
 function hazardSprite(scene: Phaser.Scene, x: number, y: number): Phaser.GameObjects.Container {

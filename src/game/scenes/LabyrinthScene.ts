@@ -2,9 +2,9 @@ import Phaser from 'phaser';
 import type { GameBridge, Player, Point } from '../../network/types';
 import { MAZE_CONFIG, MAZE_LETTER_POINTS } from '../config/mazeConfig';
 import { PlayerAvatar } from '../entities/Player';
-import { mazeLetterLimit, type MazeQuestState } from '../quest/mazeQuestTypes';
+import { mazeAssemblyReady, mazeLetterLimit, type MazeQuestState } from '../quest/mazeQuestTypes';
 import { MovementSystem, type VirtualInput } from '../systems/MovementSystem';
-import { buildMazeWorld, type MazeHazard } from '../world/MazeWorld';
+import { buildMazeWorld, preloadMazeTerrain, type MazeHazard } from '../world/MazeWorld';
 import { slideAlongMazeWalls } from '../world/mazeCollision';
 import { MAZE_WALLS } from '../world/mazeLayout';
 import { REGISTRY_KEYS } from './WorldScene';
@@ -25,7 +25,6 @@ export class LabyrinthScene extends Phaser.Scene {
   private retryLetterAt = 0;
   private ownLetters = 0;
   private letterLimit = 0;
-  private warnedAboutLetters = false;
   private checkpoint = 0;
   private savedCheckpoint = 0;
   private pendingSave = false;
@@ -34,6 +33,13 @@ export class LabyrinthScene extends Phaser.Scene {
   private completed = false;
   private retrySaveAt = 0;
   private retryArrivalAt = 0;
+  private arrivalStartedAt = 0;
+  private arrivalFailed = false;
+  private progressLoading = false;
+  private retryProgressAt = 0;
+  private waitingForTeam = false;
+  private gateWaitText: string | null = null;
+  private nextTeamRefreshAt = 0;
   private respawning = false;
   private protectedUntil = 0;
   private off: Array<() => void> = [];
@@ -41,8 +47,14 @@ export class LabyrinthScene extends Phaser.Scene {
 
   constructor() { super(SCENE_KEYS.labyrinth); }
 
-  create(): void {
+  preload(): void {
     this.bridge = this.registry.get(REGISTRY_KEYS.bridge) as GameBridge;
+    preloadMazeTerrain(this);
+    // Start fetching the room snapshot while Phaser loads the static map texture.
+    void this.bridge.mazeStart().catch(() => undefined);
+  }
+
+  create(): void {
     const virtual = this.registry.get(REGISTRY_KEYS.virtualInput) as VirtualInput | null;
     virtual?.setEnabled?.(true);
     const built = buildMazeWorld(this);
@@ -98,13 +110,20 @@ export class LabyrinthScene extends Phaser.Scene {
     }
     if (this.respawning) return;
     this.checkProgress(time);
+    this.checkGate(time);
   }
 
   private loadProgress(): void {
+    if (this.progressLoading) return;
+    this.progressLoading = true;
     void this.bridge.mazeStart()
-      .then(() => { if (this.sys.isActive()) this.applyState(this.bridge.getMazeQuestState()); })
+      .then(() => { if (this.sys.isActive() && !this.initializedProgress) this.applyState(this.bridge.getMazeQuestState()); })
       .catch(() => {
         if (this.sys.isActive()) this.notify('Не удалось загрузить лабиринт. Проверьте подключение и миграцию 007 в Supabase.', 'warn');
+      })
+      .finally(() => {
+        this.progressLoading = false;
+        this.retryProgressAt = this.time.now + 4000;
       });
   }
 
@@ -135,22 +154,51 @@ export class LabyrinthScene extends Phaser.Scene {
           .finally(() => { this.pendingLetter = false; });
       }
     }
+  }
 
+  private checkGate(time: number): void {
+    if (this.completed) return;
+    const connected = this.bridge.getStatus() === 'connected';
+    if (this.savedArrival) {
+      if (this.gateWaitText) {
+        this.hud?.setGateNotice(connected ? this.gateWaitText : 'Восстанавливаем связь у ворот…', !connected);
+      }
+      if (this.waitingForTeam && connected && time >= this.nextTeamRefreshAt) {
+        this.nextTeamRefreshAt = time + 4500;
+        void this.bridge.mazeRefresh().catch(() => undefined);
+      }
+      return;
+    }
     if (!this.near(MAZE_CONFIG.exit, 24)) {
-      this.warnedAboutLetters = false;
+      this.hud?.setGateNotice(null);
       return;
     }
-    if (this.ownLetters < this.letterLimit) {
-      if (!this.warnedAboutLetters) this.notify('Соберите свою часть букв и возвращайтесь к воротам.', 'warn');
-      this.warnedAboutLetters = true;
+    if (!connected) {
+      this.hud?.setGateNotice('Восстанавливаем связь у ворот…', true);
       return;
     }
+    if (!this.bridge.isMazeQuestReady()) {
+      this.hud?.setGateNotice('Загружаем прогресс лабиринта…', true);
+      if (time >= this.retryProgressAt) this.loadProgress();
+      return;
+    }
+    if (!this.letterLimit || this.ownLetters < this.letterLimit) {
+      this.hud?.setGateNotice('Соберите свою часть букв и возвращайтесь к воротам.');
+      return;
+    }
+
+    const slow = this.arrivalFailed || (this.pendingArrival && time - this.arrivalStartedAt >= 2500);
+    this.hud?.setGateNotice(slow ? 'Ждём ответа сервера. Задание откроется автоматически…' : 'Готовим задание с буквами…', true);
     if (!this.pendingArrival && time >= this.retryArrivalAt) {
       this.pendingArrival = true;
-      this.retryArrivalAt = time + 2000;
+      this.arrivalStartedAt = time;
       void this.bridge.mazeArrive()
-        .catch(() => this.notify('Не удалось подтвердить прибытие к замку. Повторяем попытку.', 'warn'))
-        .finally(() => { this.pendingArrival = false; });
+        .then((result) => { this.arrivalFailed = result === 'loading' || result === 'ignored'; })
+        .catch(() => { this.arrivalFailed = true; })
+        .finally(() => {
+          this.pendingArrival = false;
+          this.retryArrivalAt = this.time.now + 1500;
+        });
     }
   }
 
@@ -185,11 +233,19 @@ export class LabyrinthScene extends Phaser.Scene {
         this.savedArrival = true;
         this.movement.reset();
         this.input.keyboard?.disableGlobalCapture();
-        if (state.team.some((id) => !state.players[id]?.arrived)) this.notify('Вы у ворот. Дождитесь остальных игроков.', 'success');
       }
     }
     this.initializedProgress = true;
     if (this.checkpoint > 0) this.checkpoints[this.checkpoint].setVisible(true);
+    if (this.savedArrival) {
+      const ready = mazeAssemblyReady(state);
+      const arrived = state.team.filter((id) => state.players[id]?.arrived).length;
+      this.gateWaitText = ready ? null : 'У ворот: ' + arrived + '/' + state.team.length + '. Дождитесь команды.';
+      const waiting = !ready || (self?.solved === true && state.team.some((id) => !state.players[id]?.solved));
+      if (waiting && !this.waitingForTeam) this.nextTeamRefreshAt = this.time.now + 4500;
+      this.waitingForTeam = waiting;
+      this.hud?.setGateNotice(this.gateWaitText);
+    }
     this.hud?.present(state, selfId);
   }
 

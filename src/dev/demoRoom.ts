@@ -220,6 +220,7 @@ export class DemoRoom extends Emitter<RoomEvents> implements RoomSession {
   }
   getMazeQuestState(): MazeQuestState { return this.mazeState; }
   isMazeQuestReady(): boolean { return true; }
+  async mazeRefresh(): Promise<void> { this.emit('mazeState', this.mazeState); }
   async mazeStart(): Promise<void> {
     if (this.mazeState.team.length) return;
     const atFinal = new URLSearchParams(location.search).get('maze') === 'final';

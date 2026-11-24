@@ -244,6 +244,7 @@ export class RealtimeRoom extends Emitter<RoomEvents> implements RoomSession {
     return this.mazeStarting;
   }
   mazeSaveCheckpoint(index: number) { return this.mazeQuest?.checkpoint(index) ?? Promise.resolve('loading' as const); }
+  mazeRefresh(): Promise<void> { return this.mazeQuest?.refresh() ?? Promise.resolve(); }
   mazeCollectLetter(index: number) { return this.mazeQuest?.collect(index) ?? Promise.resolve('loading' as const); }
   mazeArrive() { return this.mazeQuest?.arrive() ?? Promise.resolve('loading' as const); }
   mazeSolvePhrase(phrase: string) { return this.mazeQuest?.solve(phrase) ?? Promise.resolve('loading' as const); }
@@ -362,16 +363,17 @@ export class RealtimeRoom extends Emitter<RoomEvents> implements RoomSession {
     const rx = Math.round(x);
     const ry = Math.round(y);
     if (rx === this.lastSent.x && ry === this.lastSent.y) return;
+    if (this.flushTimer !== null) return;
 
     const wait = this.minIntervalMs - (performance.now() - this.lastSentAt);
     if (wait <= 0) {
       this.flushPosition();
-    } else if (this.flushTimer === null) {
-      // Завершающее обновление: гарантирует, что остановка игрока дойдёт до остальных.
+    } else {
+      // A pending update sends the latest coordinates and rechecks the rate limit.
       this.flushTimer = setTimeout(() => {
         this.flushTimer = null;
-        this.flushPosition();
-      }, wait);
+        this.sendPosition(this.self.x, this.self.y);
+      }, Math.ceil(wait));
     }
   }
 
@@ -683,6 +685,8 @@ export class RealtimeRoom extends Emitter<RoomEvents> implements RoomSession {
    */
   private flushPosition(isSettle = false): void {
     if (this.status !== 'connected' || !this.channel) return;
+    if (this.flushTimer !== null) clearTimeout(this.flushTimer);
+    this.flushTimer = null;
     const x = Math.round(this.self.x);
     const y = Math.round(this.self.y);
     this.lastSent = { x, y };

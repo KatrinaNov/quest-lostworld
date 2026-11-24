@@ -1,5 +1,7 @@
 import { mazePoint } from '../world/mazeLayout';
 
+export const MAZE_TERRAIN_SCALE = 2;
+
 const spawn = mazePoint(1064, 1057);
 const boundsStart = mazePoint(71, 218);
 const boundsEnd = mazePoint(1122, 1084);
