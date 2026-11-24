@@ -138,7 +138,10 @@ export interface GameBridge {
   isMazeQuestReady(): boolean;
   mazeStart(): Promise<void>;
   mazeSaveCheckpoint(index: number): Promise<import('../game/quest/mazeQuestTypes').MazeResult>;
+  mazeCollectLetter(index: number): Promise<import('../game/quest/mazeQuestTypes').MazeResult>;
   mazeArrive(): Promise<import('../game/quest/mazeQuestTypes').MazeResult>;
+  mazeSolvePhrase(phrase: string): Promise<import('../game/quest/mazeQuestTypes').MazeResult>;
+  mazeSubmitCode(code: string): Promise<import('../game/quest/mazeQuestTypes').MazeResult>;
   getCastleQuestState(): import('../game/quest/castleQuestTypes').CastleQuestState;
   isCastleQuestReady(): boolean;
   castleStart(): Promise<void>;

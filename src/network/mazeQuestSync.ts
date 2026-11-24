@@ -35,7 +35,10 @@ export class MazeQuestSync extends Emitter<Events> {
 
   async refresh(): Promise<void> { await this.act('sync'); }
   checkpoint(index: number): Promise<MazeResult> { return this.act('checkpoint', index); }
+  collect(index: number): Promise<MazeResult> { return this.act('collect', index); }
   arrive(): Promise<MazeResult> { return this.act('arrive'); }
+  solve(phrase: string): Promise<MazeResult> { return this.act('solve', undefined, phrase); }
+  submitCode(code: string): Promise<MazeResult> { return this.act('code', undefined, code); }
 
   async destroy(): Promise<void> {
     this.closed = true;
@@ -45,12 +48,13 @@ export class MazeQuestSync extends Emitter<Events> {
     if (channel) await this.client.removeChannel(channel).catch(() => undefined);
   }
 
-  private async act(action: 'sync' | 'checkpoint' | 'arrive', checkpoint?: number): Promise<MazeResult> {
+  private async act(action: 'sync' | 'checkpoint' | 'collect' | 'arrive' | 'solve' | 'code', index?: number, answer?: string): Promise<MazeResult> {
     if (this.closed) return 'ignored';
-    const { data, error } = await this.client.rpc('maze_quest_action', {
+    const { data, error } = await this.client.rpc('maze_quest_puzzle_action', {
       p_room_code: this.room,
       p_action: action,
-      p_checkpoint: checkpoint ?? null,
+      p_index: index ?? null,
+      p_answer: answer ?? null,
       p_team: action === 'sync' ? this.getTeam() : null,
     });
     if (error) throw error;

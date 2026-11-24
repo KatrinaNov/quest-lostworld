@@ -18,7 +18,7 @@ import {
   type JungleSymbolId,
 } from '../game/quest/jungleQuestTypes';
 import { initialTempleQuestState, type TempleQuestState } from '../game/quest/templeQuestTypes';
-import { initialMazeQuestState, type MazeQuestState } from '../game/quest/mazeQuestTypes';
+import { initialMazePlayerState, initialMazeQuestState, MAZE_GLYPHS, MAZE_PHRASE, mazeAssemblyReady, type MazeQuestState } from '../game/quest/mazeQuestTypes';
 import { ALL_CASTLE_SEALS, initialCastleQuestState, isCastleSealOpen, type CastleAnswerResult } from '../game/quest/castleQuestTypes';
 
 /**
@@ -220,9 +220,51 @@ export class DemoRoom extends Emitter<RoomEvents> implements RoomSession {
   }
   getMazeQuestState(): MazeQuestState { return this.mazeState; }
   isMazeQuestReady(): boolean { return true; }
-  async mazeStart(): Promise<void> { if (!this.mazeState.team.length) this.mazeState = { ...this.mazeState, team: [this.self.id] }; this.emit('mazeState', this.mazeState); }
-  async mazeSaveCheckpoint(index: number) { const players = { ...this.mazeState.players, [this.self.id]: { checkpoint: Math.max(0, Math.min(2, index)), arrived: this.mazeState.players[this.self.id]?.arrived ?? false } }; this.mazeState = { ...this.mazeState, revision: this.mazeState.revision + 1, players }; this.emit('mazeState', this.mazeState); return 'checkpoint_saved' as const; }
-  async mazeArrive() { const players = { ...this.mazeState.players, [this.self.id]: { checkpoint: this.mazeState.players[this.self.id]?.checkpoint ?? 0, arrived: true } }; this.mazeState = { ...this.mazeState, revision: this.mazeState.revision + 1, players, completed: true }; this.emit('mazeState', this.mazeState); return 'completed' as const; }
+  async mazeStart(): Promise<void> {
+    if (this.mazeState.team.length) return;
+    const atFinal = new URLSearchParams(location.search).get('maze') === 'final';
+    this.updateMaze({
+      team: [this.self.id],
+      players: { [this.self.id]: { ...initialMazePlayerState(), arrived: atFinal } },
+      letterOwners: atFinal ? Object.fromEntries(MAZE_GLYPHS.map((_letter, index) => [index, this.self.id])) : {},
+    });
+  }
+
+  async mazeSaveCheckpoint(index: number) {
+    this.updateMaze({ players: { [this.self.id]: { ...this.mazeState.players[this.self.id], checkpoint: Math.max(0, Math.min(2, index)) } } });
+    return 'checkpoint_saved' as const;
+  }
+
+  async mazeCollectLetter(index: number) {
+    if (!MAZE_GLYPHS[index] || this.mazeState.letterOwners[index]) return 'ignored' as const;
+    this.updateMaze({ letterOwners: { ...this.mazeState.letterOwners, [index]: this.self.id } });
+    return 'collected' as const;
+  }
+
+  async mazeArrive() {
+    if (Object.keys(this.mazeState.letterOwners).length !== MAZE_GLYPHS.length) return 'ignored' as const;
+    this.updateMaze({ players: { [this.self.id]: { ...this.mazeState.players[this.self.id], arrived: true } } });
+    return 'arrived' as const;
+  }
+
+  async mazeSolvePhrase(phrase: string) {
+    if (!mazeAssemblyReady(this.mazeState)) return 'ignored' as const;
+    if (phrase !== MAZE_PHRASE) return 'wrong' as const;
+    this.updateMaze({ players: { [this.self.id]: { ...this.mazeState.players[this.self.id], solved: true } } });
+    return 'solved' as const;
+  }
+
+  async mazeSubmitCode(code: string) {
+    if (!this.mazeState.players[this.self.id]?.solved) return 'ignored' as const;
+    if (code.trim() !== '0427') return 'wrong' as const;
+    this.updateMaze({ completed: true });
+    return 'completed' as const;
+  }
+
+  private updateMaze(changes: Partial<MazeQuestState>): void {
+    this.mazeState = { ...this.mazeState, ...changes, revision: this.mazeState.revision + 1 };
+    this.emit('mazeState', this.mazeState);
+  }
 
   getCastleQuestState() { return this.castleState; }
   isCastleQuestReady() { return true; }

@@ -5,7 +5,8 @@ import { build } from 'esbuild';
 const { outputFiles } = await build({
   stdin: {
     contents: `
-      export { MAZE_CONFIG } from './src/game/config/mazeConfig.ts';
+      export { MAZE_CONFIG, MAZE_LETTER_POINTS } from './src/game/config/mazeConfig.ts';
+      export { MAZE_GLYPHS, MAZE_PHRASE, mazeLetterLimit } from './src/game/quest/mazeQuestTypes.ts';
       export * from './src/game/world/mazeLayout.ts';
       export { slideAlongMazeWalls } from './src/game/world/mazeCollision.ts';
     `,
@@ -15,7 +16,7 @@ const { outputFiles } = await build({
   bundle: true,
   write: false,
 });
-const { MAZE_CONFIG, MAZE_HAZARDS, MAZE_WALLS, mazePoint, slideAlongMazeWalls } =
+const { MAZE_CONFIG, MAZE_LETTER_POINTS, MAZE_GLYPHS, MAZE_PHRASE, mazeLetterLimit, MAZE_HAZARDS, MAZE_WALLS, mazePoint, slideAlongMazeWalls } =
   await import(`data:text/javascript;base64,${Buffer.from(outputFiles[0].contents).toString('base64')}`);
 
 const { bounds, spawn, exit, checkpoints, player } = MAZE_CONFIG;
@@ -74,6 +75,18 @@ for (let slot = 0; slot < 4; slot += 1) {
   assert.equal(visited[index({ x: spawn.x + (slot - 1.5) * 32, y: spawn.y })], 1, `Spawn ${slot + 1} is blocked`);
 }
 assert.equal(visited[index(exit)], 1, 'Castle is unreachable with the actual collision function');
+assert.equal(MAZE_LETTER_POINTS.length, MAZE_GLYPHS.length, 'A letter has no spot on the map');
+assert.deepEqual([...MAZE_GLYPHS].sort(), [...MAZE_PHRASE].sort(), 'The letters must spell the full message');
+for (const [i, letter] of MAZE_LETTER_POINTS.entries()) {
+  assert.equal(visited[index(letter)], 1, `Letter ${i + 1} is unreachable or too close to a hazard`);
+  assert.equal(isHazard(letter.x, letter.y, 27), false, `Letter ${i + 1} can be collected in a hazard`);
+}
+for (const size of [1, 2, 3, 4]) {
+  const team = Array.from({ length: size }, (_, i) => String(i));
+  const limits = team.map((id) => mazeLetterLimit(team, id));
+  assert.equal(limits.reduce((sum, count) => sum + count, 0), MAZE_GLYPHS.length);
+  assert.ok(Math.max(...limits) - Math.min(...limits) <= 1);
+}
 
 for (const rect of MAZE_WALLS) {
   const y = (rect.top + rect.bottom) / 2;
@@ -83,4 +96,4 @@ for (const rect of MAZE_WALLS) {
   const vertical = slideAlongMazeWalls({ x, y: rect.top - radius - 20 }, { x: x + 4, y: rect.bottom + radius + 20 }, [rect], radius);
   assert.equal(vertical.y, rect.top - radius, 'Diagonal movement went through a wall vertically');
 }
-console.log(`Maze OK: ${MAZE_WALLS.length} wall spans, 4 connected spawns, ${checkpoints.length} checkpoints, and a hazard-free route to the castle.`);
+console.log(`Maze OK: ${MAZE_WALLS.length} wall spans, 4 connected spawns, ${checkpoints.length} checkpoints, ${MAZE_LETTER_POINTS.length} reachable letters, and a hazard-free route to the castle.`);

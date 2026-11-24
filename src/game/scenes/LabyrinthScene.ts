@@ -1,14 +1,15 @@
 import Phaser from 'phaser';
 import type { GameBridge, Player, Point } from '../../network/types';
-import { MAZE_CONFIG } from '../config/mazeConfig';
+import { MAZE_CONFIG, MAZE_LETTER_POINTS } from '../config/mazeConfig';
 import { PlayerAvatar } from '../entities/Player';
-import type { MazeQuestState } from '../quest/mazeQuestTypes';
+import { mazeLetterLimit, type MazeQuestState } from '../quest/mazeQuestTypes';
 import { MovementSystem, type VirtualInput } from '../systems/MovementSystem';
 import { buildMazeWorld, type MazeHazard } from '../world/MazeWorld';
 import { slideAlongMazeWalls } from '../world/mazeCollision';
 import { MAZE_WALLS } from '../world/mazeLayout';
 import { REGISTRY_KEYS } from './WorldScene';
 import { SCENE_KEYS } from './BootScene';
+import { MazeQuestHud } from '../../ui/MazeQuestHud';
 
 export class LabyrinthScene extends Phaser.Scene {
   private bridge!: GameBridge;
@@ -18,6 +19,13 @@ export class LabyrinthScene extends Phaser.Scene {
   private position: Point = { ...MAZE_CONFIG.spawn };
   private hazards: MazeHazard[] = [];
   private checkpoints: Phaser.GameObjects.Rectangle[] = [];
+  private letters: Phaser.GameObjects.Container[] = [];
+  private hud: MazeQuestHud | null = null;
+  private pendingLetter = false;
+  private retryLetterAt = 0;
+  private ownLetters = 0;
+  private letterLimit = 0;
+  private warnedAboutLetters = false;
   private checkpoint = 0;
   private savedCheckpoint = 0;
   private pendingSave = false;
@@ -40,6 +48,12 @@ export class LabyrinthScene extends Phaser.Scene {
     const built = buildMazeWorld(this);
     this.hazards = built.hazards;
     this.checkpoints = built.checkpoints;
+    this.letters = built.letters;
+    const uiRoot = document.getElementById('ui-root');
+    if (uiRoot) this.hud = new MazeQuestHud(uiRoot, {
+      solve: (phrase) => this.bridge.mazeSolvePhrase(phrase),
+      submitCode: (code) => this.bridge.mazeSubmitCode(code),
+    });
     this.movement = new MovementSystem(
       this, virtual, [], MAZE_CONFIG.bounds, MAZE_CONFIG.player.speed, MAZE_CONFIG.player.radius,
       (from, target) => slideAlongMazeWalls(from, target, MAZE_WALLS, MAZE_CONFIG.player.radius),
@@ -72,7 +86,7 @@ export class LabyrinthScene extends Phaser.Scene {
 
   override update(time: number, delta: number): void {
     const dt = Math.min(delta, MAZE_CONFIG.player.maxFrameDeltaMs);
-    if (!this.respawning) this.position = this.movement.step(this.position, dt / 1000);
+    if (!this.respawning && !this.savedArrival) this.position = this.movement.step(this.position, dt / 1000);
     const { x, y } = this.position;
     this.local.tickLocal(x, y, this.movement.getDirection(), time);
     this.bridge.sendPosition(x, y);
@@ -80,7 +94,7 @@ export class LabyrinthScene extends Phaser.Scene {
 
     for (const hazard of this.hazards) {
       hazard.sprite.setVisible(hazard.hits(x, y, MAZE_CONFIG.hazardReveal));
-      if (!this.respawning && time >= this.protectedUntil && hazard.hits(x, y, MAZE_CONFIG.player.radius)) this.die();
+      if (!this.respawning && !this.savedArrival && time >= this.protectedUntil && hazard.hits(x, y, MAZE_CONFIG.player.radius)) this.die();
     }
     if (this.respawning) return;
     this.checkProgress(time);
@@ -90,7 +104,7 @@ export class LabyrinthScene extends Phaser.Scene {
     void this.bridge.mazeStart()
       .then(() => { if (this.sys.isActive()) this.applyState(this.bridge.getMazeQuestState()); })
       .catch(() => {
-        if (this.sys.isActive()) this.notify('Не удалось загрузить прогресс лабиринта. Проверьте подключение и миграцию Supabase.', 'warn');
+        if (this.sys.isActive()) this.notify('Не удалось загрузить лабиринт. Проверьте подключение и миграцию 007 в Supabase.', 'warn');
       });
   }
 
@@ -110,7 +124,28 @@ export class LabyrinthScene extends Phaser.Scene {
         .catch(() => this.notify('Не удалось сохранить чекпоинт. Повторяем попытку.', 'warn'))
         .finally(() => { this.pendingSave = false; });
     }
-    if (!this.savedArrival && !this.pendingArrival && this.near(MAZE_CONFIG.exit, 24) && time >= this.retryArrivalAt) {
+    if (this.savedArrival || !this.letterLimit) return;
+    if (this.ownLetters < this.letterLimit && !this.pendingLetter && time >= this.retryLetterAt) {
+      const letter = MAZE_LETTER_POINTS.findIndex((point, index) => this.letters[index].visible && this.near(point, 27));
+      if (letter >= 0) {
+        this.pendingLetter = true;
+        this.retryLetterAt = time + 900;
+        void this.bridge.mazeCollectLetter(letter)
+          .catch(() => { if (this.sys.isActive()) this.notify('Буква не сохранилась. Повторяем попытку.', 'warn'); })
+          .finally(() => { this.pendingLetter = false; });
+      }
+    }
+
+    if (!this.near(MAZE_CONFIG.exit, 24)) {
+      this.warnedAboutLetters = false;
+      return;
+    }
+    if (this.ownLetters < this.letterLimit) {
+      if (!this.warnedAboutLetters) this.notify('Соберите свою часть букв и возвращайтесь к воротам.', 'warn');
+      this.warnedAboutLetters = true;
+      return;
+    }
+    if (!this.pendingArrival && time >= this.retryArrivalAt) {
       this.pendingArrival = true;
       this.retryArrivalAt = time + 2000;
       void this.bridge.mazeArrive()
@@ -124,27 +159,38 @@ export class LabyrinthScene extends Phaser.Scene {
   }
 
   private applyState(state: MazeQuestState): void {
-    const self = state.players[this.bridge.self.id];
+    if (this.completed) return;
+    if (state.completed) {
+      this.completed = true;
+      this.notify('Вход в сокровищницу открыт!', 'success');
+      sessionStorage.setItem('castle-room', this.bridge.roomCode);
+      this.scene.start(SCENE_KEYS.castle);
+      return;
+    }
+
+    const selfId = this.bridge.self.id;
+    const self = state.players[selfId];
+    this.letterLimit = mazeLetterLimit(state.team, selfId);
+    this.ownLetters = Object.values(state.letterOwners).filter((id) => id === selfId).length;
+    this.letters.forEach((letter, index) => letter.setVisible(!state.letterOwners[index]));
     if (self) {
+      const atGate = self.arrived && this.letterLimit > 0 && this.ownLetters === this.letterLimit;
       this.savedCheckpoint = Math.max(this.savedCheckpoint, self.checkpoint);
       this.checkpoint = Math.max(this.checkpoint, self.checkpoint);
       if (!this.initializedProgress) {
-        if (self.arrived) this.position = { ...MAZE_CONFIG.exit };
+        if (atGate) this.position = { ...MAZE_CONFIG.exit };
         else if (self.checkpoint > 0) this.position = { ...MAZE_CONFIG.checkpoints[self.checkpoint] };
       }
-      if (self.arrived && !this.savedArrival) {
+      if (atGate && !this.savedArrival) {
         this.savedArrival = true;
-        if (!state.completed) this.notify('Вы добрались до замка! Дождитесь остальных игроков', 'success');
+        this.movement.reset();
+        this.input.keyboard?.disableGlobalCapture();
+        if (state.team.some((id) => !state.players[id]?.arrived)) this.notify('Вы у ворот. Дождитесь остальных игроков.', 'success');
       }
     }
     this.initializedProgress = true;
     if (this.checkpoint > 0) this.checkpoints[this.checkpoint].setVisible(true);
-    if (state.completed && !this.completed) {
-      this.completed = true;
-      this.notify('ЛАБИРИНТ ПРОЙДЕН!', 'success');
-      this.scene.start(SCENE_KEYS.castle);
-      sessionStorage.setItem('castle-room', this.bridge.roomCode);
-    }
+    this.hud?.present(state, selfId);
   }
 
   private die(): void {
@@ -186,6 +232,9 @@ export class LabyrinthScene extends Phaser.Scene {
     for (const stop of this.off) stop();
     this.off = [];
     this.scale.off(Phaser.Scale.Events.RESIZE, this.applyZoom, this);
+    if (this.savedArrival) this.input.keyboard?.enableGlobalCapture();
+    this.hud?.destroy();
+    this.hud = null;
     this.movement.destroy();
     this.remotes.clear();
   }

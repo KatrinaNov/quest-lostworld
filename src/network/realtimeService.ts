@@ -244,7 +244,10 @@ export class RealtimeRoom extends Emitter<RoomEvents> implements RoomSession {
     return this.mazeStarting;
   }
   mazeSaveCheckpoint(index: number) { return this.mazeQuest?.checkpoint(index) ?? Promise.resolve('loading' as const); }
+  mazeCollectLetter(index: number) { return this.mazeQuest?.collect(index) ?? Promise.resolve('loading' as const); }
   mazeArrive() { return this.mazeQuest?.arrive() ?? Promise.resolve('loading' as const); }
+  mazeSolvePhrase(phrase: string) { return this.mazeQuest?.solve(phrase) ?? Promise.resolve('loading' as const); }
+  mazeSubmitCode(code: string) { return this.mazeQuest?.submitCode(code) ?? Promise.resolve('loading' as const); }
 
   getCastleQuestState() { return this.castleQuest?.getState() ?? initialCastleQuestState(); }
   isCastleQuestReady(): boolean { return this.castleQuest?.isReady() ?? false; }

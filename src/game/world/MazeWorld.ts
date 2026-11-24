@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
-import { MAZE_CONFIG, MAZE_PALETTE } from '../config/mazeConfig';
+import { MAZE_CONFIG, MAZE_LETTER_POINTS, MAZE_PALETTE } from '../config/mazeConfig';
+import { MAZE_GLYPHS } from '../quest/mazeQuestTypes';
 import { createRng } from '../config/worldConfig';
 import { MAZE_HAZARDS, MAZE_SCALE, MAZE_WALLS, mazePoint } from './mazeLayout';
 
@@ -14,6 +15,7 @@ export interface MazeHazard {
 export function buildMazeWorld(scene: Phaser.Scene): {
   hazards: MazeHazard[];
   checkpoints: Phaser.GameObjects.Rectangle[];
+  letters: Phaser.GameObjects.Container[];
 } {
   addTerrain(scene);
   drawCastle(scene);
@@ -31,7 +33,12 @@ export function buildMazeWorld(scene: Phaser.Scene): {
     scene.add.rectangle(point.x, point.y, 22, 22, 0x9bd5de, 0.24)
       .setStrokeStyle(2, 0xdff8ff, 0.65).setDepth(-1).setVisible(false),
   );
-  return { hazards, checkpoints };
+  const letters = MAZE_LETTER_POINTS.map(({ x, y }, index) => {
+    const tile = scene.add.rectangle(0, 0, 34, 36, 0x2e493c).setStrokeStyle(2, 0xedc872);
+    const glyph = scene.add.text(0, 1, MAZE_GLYPHS[index], { fontFamily: 'Georgia', fontSize: '26px', color: '#fff2c8' }).setOrigin(0.5);
+    return scene.add.container(x, y, [tile, glyph]).setDepth(y - 1).setVisible(false);
+  });
+  return { hazards, checkpoints, letters };
 }
 
 function addTerrain(scene: Phaser.Scene): void {
