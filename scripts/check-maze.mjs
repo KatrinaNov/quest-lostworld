@@ -8,6 +8,7 @@ const { outputFiles } = await build({
       export { MAZE_CONFIG, MAZE_LETTER_POINTS } from './src/game/config/mazeConfig.ts';
       export { MAZE_GLYPHS, MAZE_PHRASE, mazeLetterLimit } from './src/game/quest/mazeQuestTypes.ts';
       export * from './src/game/world/mazeLayout.ts';
+      export { MAZE_CORRIDOR_HAZARDS, MAZE_POOL_AREA, mazeHazardHits } from './src/game/world/mazeHazards.ts';
       export { slideAlongMazeWalls } from './src/game/world/mazeCollision.ts';
     `,
     resolveDir: fileURLToPath(new URL('..', import.meta.url)),
@@ -16,23 +17,15 @@ const { outputFiles } = await build({
   bundle: true,
   write: false,
 });
-const { MAZE_CONFIG, MAZE_LETTER_POINTS, MAZE_GLYPHS, MAZE_PHRASE, mazeLetterLimit, MAZE_HAZARDS, MAZE_WALLS, mazePoint, slideAlongMazeWalls } =
+const { MAZE_CONFIG, MAZE_LETTER_POINTS, MAZE_GLYPHS, MAZE_PHRASE, mazeLetterLimit, MAZE_WALLS,
+  MAZE_CORRIDOR_HAZARDS, MAZE_POOL_AREA, mazeHazardHits, slideAlongMazeWalls } =
   await import(`data:text/javascript;base64,${Buffer.from(outputFiles[0].contents).toString('base64')}`);
 
 const { bounds, spawn, exit, checkpoints, player } = MAZE_CONFIG;
 const radius = player.radius;
-const toCircle = ([x, y], r) => ({ ...mazePoint(x, y), r });
-const circles = [
-  ...MAZE_HAZARDS.skeletons.map((point) => toCircle(point, 18)),
-  ...MAZE_HAZARDS.bushes.map((point) => toCircle(point, 24)),
-];
-const pool = MAZE_HAZARDS.pool;
-const poolCenter = mazePoint(pool.x, pool.y);
+const hazardAreas = [...MAZE_CORRIDOR_HAZARDS.map(({ area }) => area), MAZE_POOL_AREA];
 function isHazard(x, y, pad = 0) {
-  if (circles.some((circle) => Math.hypot(x - circle.x, y - circle.y) < circle.r + radius + pad)) return true;
-  const dx = Math.max(0, Math.abs(x - poolCenter.x) - (pool.width - 4));
-  const dy = Math.max(0, Math.abs(y - poolCenter.y) - (pool.height - 4));
-  return Math.hypot(dx, dy) < radius + pad;
+  return hazardAreas.some((area) => mazeHazardHits(area, x, y, radius + pad));
 }
 
 const cell = 4;
@@ -81,6 +74,24 @@ for (const [i, letter] of MAZE_LETTER_POINTS.entries()) {
   assert.equal(visited[index(letter)], 1, `Letter ${i + 1} is unreachable or too close to a hazard`);
   assert.equal(isHazard(letter.x, letter.y, 27), false, `Letter ${i + 1} can be collected in a hazard`);
 }
+
+const maxStep = player.speed * player.maxFrameDeltaMs / 1000;
+for (const [i, { point: center, across, area }] of MAZE_CORRIDOR_HAZARDS.entries()) {
+  const horizontal = across === 'x';
+  const along = horizontal ? 'y' : 'x';
+  const limits = horizontal ? [bounds.minX, bounds.maxX] : [bounds.minY, bounds.maxY];
+  const edges = limits.map((limit) => slideAlongMazeWalls(center, { ...center, [across]: limit }, MAZE_WALLS, radius)[across]);
+  const min = horizontal ? area.top : area.left;
+  const max = horizontal ? area.bottom : area.right;
+  for (const edge of edges) {
+    let hit = false;
+    for (let position = min - radius - 1; position <= max + radius; position += maxStep) {
+      const attempt = { [across]: edge, [along]: position };
+      hit ||= mazeHazardHits(area, attempt.x, attempt.y, radius);
+    }
+    assert.ok(hit, `Hazard ${i + 1} can be bypassed along the wall`);
+  }
+}
 for (const size of [1, 2, 3, 4]) {
   const team = Array.from({ length: size }, (_, i) => String(i));
   const limits = team.map((id) => mazeLetterLimit(team, id));
@@ -96,4 +107,4 @@ for (const rect of MAZE_WALLS) {
   const vertical = slideAlongMazeWalls({ x, y: rect.top - radius - 20 }, { x: x + 4, y: rect.bottom + radius + 20 }, [rect], radius);
   assert.equal(vertical.y, rect.top - radius, 'Diagonal movement went through a wall vertically');
 }
-console.log(`Maze OK: ${MAZE_WALLS.length} wall spans, 4 connected spawns, ${checkpoints.length} checkpoints, ${MAZE_LETTER_POINTS.length} reachable letters, and a hazard-free route to the castle.`);
+console.log(`Maze OK: ${MAZE_WALLS.length} wall spans, 4 connected spawns, ${checkpoints.length} checkpoints, ${MAZE_LETTER_POINTS.length} reachable letters, ${MAZE_CORRIDOR_HAZARDS.length} checked hazards, and a hazard-free route to the castle.`);

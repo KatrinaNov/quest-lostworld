@@ -2,7 +2,8 @@ import Phaser from 'phaser';
 import { MAZE_CONFIG, MAZE_LETTER_POINTS, MAZE_PALETTE, MAZE_TERRAIN_SCALE } from '../config/mazeConfig';
 import { MAZE_GLYPHS } from '../quest/mazeQuestTypes';
 import terrainUrl from './maze-terrain.png';
-import { MAZE_HAZARDS, MAZE_SCALE, MAZE_WALLS, mazePoint } from './mazeLayout';
+import { MAZE_HAZARDS, MAZE_SCALE, MAZE_WALLS, mazePoint, type MazeRect } from './mazeLayout';
+import { MAZE_CORRIDOR_HAZARDS, MAZE_POOL_AREA, mazeHazardHits, type MazeCorridorHazard } from './mazeHazards';
 
 const TERRAIN_TEXTURE = 'labyrinth-stone-and-hedges';
 
@@ -24,8 +25,7 @@ export function buildMazeWorld(scene: Phaser.Scene): {
     .fillTriangle(entrance.x - 60, entrance.y, entrance.x - 42, entrance.y - 10, entrance.x - 42, entrance.y + 10);
 
   const hazards = [
-    ...MAZE_HAZARDS.skeletons.map(([x, y]) => makeSkeleton(scene, x, y)),
-    ...MAZE_HAZARDS.bushes.map(([x, y]) => makeBush(scene, x, y)),
+    ...MAZE_CORRIDOR_HAZARDS.map((hazard) => hazard.kind === 'skeleton' ? makeSkeleton(scene, hazard) : makeBush(scene, hazard)),
     makePool(scene),
   ];
   const checkpoints = MAZE_CONFIG.checkpoints.map((point) =>
@@ -61,20 +61,32 @@ function addTerrain(scene: Phaser.Scene): void {
   }
 }
 
-function hazardSprite(scene: Phaser.Scene, x: number, y: number): Phaser.GameObjects.Container {
-  const point = mazePoint(x, y);
+function hazardSprite(scene: Phaser.Scene, point: ReturnType<typeof mazePoint>): Phaser.GameObjects.Container {
   return scene.add.container(point.x, point.y).setDepth(4).setVisible(false);
 }
 
-function circleHazard(sprite: Phaser.GameObjects.Container, hitRadius: number): MazeHazard {
+function areaHazard(sprite: Phaser.GameObjects.Container, area: MazeRect): MazeHazard {
   return {
     sprite,
-    hits: (x, y, radius) => Phaser.Math.Distance.Squared(x, y, sprite.x, sprite.y) < (radius + hitRadius) ** 2,
+    hits: (x, y, radius) => mazeHazardHits(area, x, y, radius),
   };
 }
 
-function makeSkeleton(scene: Phaser.Scene, x: number, y: number): MazeHazard {
-  const sprite = hazardSprite(scene, x, y);
+function corridorHazardSprite(scene: Phaser.Scene, hazard: MazeCorridorHazard, color: number): Phaser.GameObjects.Container {
+  const { point, area } = hazard;
+  const sprite = hazardSprite(scene, point);
+  const x = area.left - point.x;
+  const y = area.top - point.y;
+  const width = area.right - area.left;
+  const height = area.bottom - area.top;
+  const band = scene.add.graphics().fillStyle(color, 0.22).fillRect(x, y, width, height)
+    .lineStyle(2, color, 0.65).strokeRect(x, y, width, height);
+  sprite.add(band);
+  return sprite;
+}
+
+function makeSkeleton(scene: Phaser.Scene, hazard: MazeCorridorHazard): MazeHazard {
+  const sprite = corridorHazardSprite(scene, hazard, 0xcb929f);
   const g = scene.add.graphics();
   g.fillStyle(0x1a1726).fillRect(-32, -40, 64, 80);
   g.fillStyle(0xf4f1ef).fillRect(-23, -39, 46, 25).fillRect(-29, -10, 58, 23)
@@ -83,11 +95,11 @@ function makeSkeleton(scene: Phaser.Scene, x: number, y: number): MazeHazard {
   g.fillStyle(0x23202d).fillRect(-14, -31, 9, 6).fillRect(5, -31, 9, 6);
   sprite.add(g);
   scene.tweens.add({ targets: g, y: -4, duration: 550, yoyo: true, repeat: -1 });
-  return circleHazard(sprite, 18);
+  return areaHazard(sprite, hazard.area);
 }
 
-function makeBush(scene: Phaser.Scene, x: number, y: number): MazeHazard {
-  const sprite = hazardSprite(scene, x, y);
+function makeBush(scene: Phaser.Scene, hazard: MazeCorridorHazard): MazeHazard {
+  const sprite = corridorHazardSprite(scene, hazard, 0xa9cb65);
   const g = scene.add.graphics();
   for (let i = -3; i <= 3; i += 1) {
     const leafY = 14 - Math.abs(i) * 12;
@@ -96,12 +108,12 @@ function makeBush(scene: Phaser.Scene, x: number, y: number): MazeHazard {
   }
   g.fillStyle(0x48771b).fillRect(-21, 25, 42, 9);
   sprite.add(g);
-  return circleHazard(sprite, 24);
+  return areaHazard(sprite, hazard.area);
 }
 
 function makePool(scene: Phaser.Scene): MazeHazard {
   const { x, y, width, height } = MAZE_HAZARDS.pool;
-  const sprite = hazardSprite(scene, x, y);
+  const sprite = hazardSprite(scene, mazePoint(x, y));
   const w = width * MAZE_SCALE / 2;
   const h = height * MAZE_SCALE / 2;
   const g = scene.add.graphics();
@@ -113,14 +125,7 @@ function makePool(scene: Phaser.Scene): MazeHazard {
   ripple.fillStyle(0x62d2fd).fillRect(-48, -20, 23, 8).fillRect(25, 18, 26, 8).fillRect(79, -34, 10, 10);
   sprite.add([g, ripple]);
   scene.tweens.add({ targets: ripple, alpha: 0.25, duration: 720, yoyo: true, repeat: -1 });
-  return {
-    sprite,
-    hits: (px, py, radius) => {
-      const dx = Math.max(0, Math.abs(px - sprite.x) - (w - 4));
-      const dy = Math.max(0, Math.abs(py - sprite.y) - (h - 4));
-      return dx * dx + dy * dy < radius * radius;
-    },
-  };
+  return areaHazard(sprite, MAZE_POOL_AREA);
 }
 
 function drawCastle(scene: Phaser.Scene): void {

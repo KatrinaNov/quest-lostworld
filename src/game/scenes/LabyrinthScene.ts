@@ -98,16 +98,21 @@ export class LabyrinthScene extends Phaser.Scene {
 
   override update(time: number, delta: number): void {
     const dt = Math.min(delta, MAZE_CONFIG.player.maxFrameDeltaMs);
+    const previous = this.position;
     if (!this.respawning && !this.savedArrival) this.position = this.movement.step(this.position, dt / 1000);
+    for (const hazard of this.hazards) {
+      const { x, y } = this.position;
+      hazard.sprite.setVisible(hazard.hits(x, y, MAZE_CONFIG.hazardReveal));
+      if (this.respawning || this.savedArrival || !hazard.hits(x, y, MAZE_CONFIG.player.radius)) continue;
+      if (time < this.protectedUntil) this.position = previous;
+      else this.die();
+    }
+
     const { x, y } = this.position;
     this.local.tickLocal(x, y, this.movement.getDirection(), time);
     this.bridge.sendPosition(x, y);
     for (const remote of this.remotes.values()) remote.tickRemote(dt, time);
 
-    for (const hazard of this.hazards) {
-      hazard.sprite.setVisible(hazard.hits(x, y, MAZE_CONFIG.hazardReveal));
-      if (!this.respawning && !this.savedArrival && time >= this.protectedUntil && hazard.hits(x, y, MAZE_CONFIG.player.radius)) this.die();
-    }
     if (this.respawning) return;
     this.checkProgress(time);
     this.checkGate(time);
