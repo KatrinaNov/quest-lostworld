@@ -147,7 +147,7 @@ export interface GameBridge {
   getCastleQuestState(): import('../game/quest/castleQuestTypes').CastleQuestState;
   isCastleQuestReady(): boolean;
   castleStart(): Promise<void>;
-  castleAnswer(seal: number, answer: string): Promise<import('../game/quest/castleQuestTypes').CastleAnswerResult>;
+  castleAnswer(seal: number, answer?: string): Promise<import('../game/quest/castleQuestTypes').CastleAnswer>;
 }
 
 /** Сессия комнаты для приложения: мост для игры + возможность выйти. */

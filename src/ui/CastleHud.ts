@@ -1,19 +1,21 @@
-import { CASTLE_ELEMENTS, CASTLE_GIFT_HINT, CASTLE_SEALS, type CastleSeal } from '../game/config/castleConfig';
-import { isCastleSealOpen, type CastleAnswerResult, type CastleQuestState } from '../game/quest/castleQuestTypes';
+import { CASTLE_GIFT_HINT, CASTLE_SEALS, type CastleSeal } from '../game/config/castleConfig';
+import { isCastleSealOpen, type CastleAnswer, type CastleQuestState } from '../game/quest/castleQuestTypes';
+import { memoryPuzzleMarkup, mountCastleMemory } from './CastleMemoryPuzzle';
+import { mountRelicOrder, relicOrderMarkup } from './CastleRelicOrder';
+import '../styles/castlePuzzles.css';
 
-function countSelect(name: string, label: string, max: number): string {
-  const options = Array.from({ length: max + 1 }, (_, count) => `<option value="${count}">${count}</option>`).join('');
-  return `<label>${label}<select name="${name}" required><option value="" selected disabled>—</option>${options}</select></label>`;
+function equationSymbol(icon: string, name: string): string {
+  return `<span class="castle-equation-symbol"><b aria-hidden="true">${icon}</b><span>${name}</span></span>`;
 }
 
-function puzzleFields(seal: CastleSeal): string {
+function puzzleFields(seal: Extract<CastleSeal, { id: 0 | 1 }>): string {
   switch (seal.id) {
-    case 0: return `<div class="castle-elements">${CASTLE_ELEMENTS.map((element) =>
-      `<button type="button" data-element="${element.value}" aria-pressed="false"><span>${element.glyph}</span>${element.label}</button>`).join('')}</div>
-      <div class="castle-order-row"><output aria-live="polite"></output><button type="button" data-clear>Сбросить</button></div>`;
-    case 1: return `<div class="castle-fields">${countSelect('emeralds', 'Найдено изумрудов', 9)}</div>`;
-    case 2: return `<div class="castle-fields">${countSelect('left', 'Левая', 6)}${countSelect('middle', 'Средняя', 6)}${countSelect('right', 'Правая', 6)}</div>`;
-    case 3: return '<div class="castle-fields"><label>Слово с наклейки<input name="word" type="text" maxlength="24" autocomplete="off" autocapitalize="characters" spellcheck="false" required></label></div>';
+    case 0: return relicOrderMarkup() + '<p class="castle-physical-clue">Отыщите семь брелоков на стенах вашего дома. Вспомните, в каком порядке встают их цвета, когда после дождя над землёй появляется радуга.</p>';
+    case 1: return `<div class="castle-equation" role="img" aria-label="Камень плюс вода умножить на ветер минус солнце умножить на разность травы и дерева">
+      <span class="castle-equation-group">${equationSymbol('🪨', 'Камень')} + ${equationSymbol('💧', 'Вода')} × ${equationSymbol('🌬️', 'Ветер')}</span>
+      <span class="castle-equation-group">− ${equationSymbol('☀️', 'Солнце')} × ( ${equationSymbol('🌱', 'Трава')} − ${equationSymbol('🌳', 'Дерево')} )</span>
+      </div><div class="castle-fields"><label>Код<input name="code" type="text" inputmode="numeric" pattern="[0-9]+" maxlength="8" autocomplete="off" required></label></div>
+      <p class="castle-physical-clue">Ищите подсказки возле предметов цвета изумруда. На одной стороне каждого камня — знак, на другой — его число.</p>`;
   }
 }
 
@@ -22,6 +24,7 @@ export class CastleHud {
   private readonly backdrop: HTMLDivElement;
   private readonly dialog: HTMLElement;
   private sealId: number | null = null;
+  private puzzleCleanup: (() => void) | null = null;
 
   constructor(parent: HTMLElement) {
     this.progress = document.createElement('section');
@@ -62,41 +65,36 @@ export class CastleHud {
 
   isOpen(): boolean { return !this.backdrop.hidden; }
 
-  showPuzzle(seal: CastleSeal, solve: (answer: string) => Promise<CastleAnswerResult>): void {
+  showPuzzle(seal: CastleSeal, solve: (answer?: string) => Promise<CastleAnswer>): void {
     this.sealId = seal.id;
+    this.dialog.dataset.puzzle = String(seal.id);
+    if (seal.id === 3) {
+      this.show(seal.name, `<p>${seal.clue}</p><p>Отпустите зеркало, и оно вернётся на место. Если вы здесь одни, достаточно одного луча.</p>`,
+        '<button type="button" class="legend-start" data-close>К зеркалам</button>');
+      return;
+    }
+    if (seal.id === 2) {
+      this.show(seal.name, `<p>${seal.clue}</p>`, memoryPuzzleMarkup());
+      this.puzzleCleanup = mountCastleMemory(this.dialog, solve, () => this.close());
+      return;
+    }
     this.show(seal.name, `<p>${seal.clue}</p>`, `<form class="castle-form">${puzzleFields(seal)}
       <p class="castle-feedback" role="status" hidden></p><button type="submit" class="legend-start">Проверить</button></form>`);
     const form = this.dialog.querySelector('form')!;
     const submit = form.querySelector<HTMLButtonElement>('[type="submit"]')!;
     const feedback = form.querySelector<HTMLElement>('.castle-feedback')!;
-    const order: string[] = [];
-    if (seal.id === 0) {
-      const options = form.querySelectorAll<HTMLButtonElement>('[data-element]');
-      const sequence = form.querySelector('output')!;
-      const updateSequence = (): void => {
-        for (const option of options) option.setAttribute('aria-pressed', String(order.includes(option.dataset.element!)));
-        submit.disabled = order.length !== CASTLE_ELEMENTS.length;
-        sequence.textContent = order.map((value) => CASTLE_ELEMENTS.find((element) => element.value === value)!.label).join(' → ') || 'Выберите первую стихию';
-      };
-      for (const option of options) option.addEventListener('click', () => {
-        const value = option.dataset.element!;
-        const index = order.indexOf(value);
-        if (index === -1) order.push(value);
-        else order.splice(index, 1);
-        updateSequence();
-      });
-      form.querySelector('[data-clear]')?.addEventListener('click', () => { order.length = 0; updateSequence(); });
-      updateSequence();
-    }
+    const board = form.querySelector<HTMLElement>('.castle-relics');
+    const readOrder = board ? mountRelicOrder(board) : null;
+    const tiles = board?.querySelectorAll<HTMLButtonElement>('button');
     form.addEventListener('submit', (event) => {
       event.preventDefault();
       if (submit.disabled) return;
-      const fields = new FormData(form);
-      const answer = seal.id === 0 ? order.join(',') : [...fields.values()].join(',');
+      const answer = readOrder?.() ?? String(new FormData(form).get('code') ?? '');
       if (!answer.trim()) return;
       submit.disabled = true;
+      tiles?.forEach((tile) => { tile.disabled = true; });
       feedback.hidden = true;
-      void solve(answer).then((result) => {
+      void solve(answer).then(({ result }) => {
         if (!form.isConnected || !this.isOpen()) return;
         if (result === 'opened' || result === 'already_open' || result === 'completed') this.close();
         else {
@@ -106,27 +104,33 @@ export class CastleHud {
       }).catch(() => {
         feedback.textContent = 'Не удалось отправить ответ. Попробуйте ещё раз.';
         feedback.hidden = false;
-      }).finally(() => { submit.disabled = seal.id === 0 && order.length !== CASTLE_ELEMENTS.length; });
+      }).finally(() => {
+        submit.disabled = false;
+        tiles?.forEach((tile) => { tile.disabled = false; });
+      });
     });
   }
 
   showEnding(): void {
     this.sealId = null;
-    this.show('Клад затерянного мира', '<p>Щёлкнула последняя печать. Дракон поднял голову, и ровный свет факелов залил открытый сундук.</p>' +
-      '<p>Внутри лежало послание стража. Ключи открыли вам путь, звёзды вывели из храма, а в лабиринте вы дождались друг друга. С последним испытанием вы справились вместе. Теперь клад ваш.</p>' +
-      `<p class="castle-gift"><strong>${CASTLE_GIFT_HINT}</strong></p>`, '<button type="button" class="legend-start" data-close>Мы нашли клад!</button>');
+    this.show('Вы нашли клад!', '<p>Последняя печать вспыхнула. Пламя погасло, и дракон растворился в золотом свете. В открытом сундуке осталось послание стража.</p>' +
+      '<p>«Вы отыскали ключи, раскрыли тайну джунглей, прошли храм и выбрались из лабиринта. Всё это вам удалось, потому что вы держались вместе. Поздравляю, искатели! Клад затерянного мира теперь ваш».</p>' +
+      `<p class="castle-gift"><strong>${CASTLE_GIFT_HINT}</strong></p>`, '<button type="button" class="legend-start" data-close>За кладом!</button>');
   }
 
   showWelcome(): void {
-    this.show('Замок дракона', '<p>В глубине зала стоит запечатанный сундук. Четыре печати защищают его с той ночи, когда дракон спрятал последний клад.</p>' +
-      '<p>Осмотрите постаменты. Некоторые ответы лежат здесь, а за другими придётся выйти в настоящий мир.</p>',
+    this.show('Замок дракона', '<p>Страж укрыл сундук своим пламенем. Держитесь подальше от огня: он отбросит вас ко входу.</p>' +
+      '<p>Осмотрите четыре постамента. Снимите все печати, чтобы погасить пламя и добраться до клада.</p>',
     '<button type="button" class="legend-start" data-close>Осмотреть замок</button>');
   }
 
   close(): void {
     if (this.backdrop.hidden) return;
+    this.puzzleCleanup?.();
+    this.puzzleCleanup = null;
     this.backdrop.hidden = true;
     this.sealId = null;
+    delete this.dialog.dataset.puzzle;
     document.body.classList.remove('modal-open');
   }
 

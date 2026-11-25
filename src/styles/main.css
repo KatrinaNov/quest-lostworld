@@ -875,9 +875,9 @@ input {
 .castle-modal { --legend-width: 560px; }
 .castle-modal .legend-body { margin-bottom: 12px; }
 .castle-form { width: 100%; text-align: center; }
-.castle-elements, .castle-fields { display: flex; justify-content: center; gap: 7px; }
+.castle-fields { display: flex; justify-content: center; gap: 7px; }
 
-.castle-elements button, .castle-fields :is(input, select), .castle-order-row button {
+.castle-fields input {
   min-height: 44px;
   border: 1px solid #ab8855;
   border-radius: 8px;
@@ -887,15 +887,8 @@ input {
   font-size: 16px;
 }
 
-.castle-elements button { min-width: 0; flex: 1; padding: 5px 2px; }
-.castle-elements button span { display: block; font-size: 20px; }
-.castle-elements button[aria-pressed='true'] { background: #315843; border-color: #315843; color: #fff1c8; }
-.castle-order-row { display: flex; justify-content: space-between; align-items: center; gap: 7px; margin: 5px 0; }
-.castle-order-row output { font-size: 14px; }
-.castle-order-row button { min-height: 38px; padding-inline: 8px; }
 .castle-fields { margin-block: 8px; }
 .castle-fields label { display: grid; gap: 4px; justify-items: center; }
-.castle-fields select { min-width: 69px; padding-inline: 7px; }
 .castle-fields input { width: min(230px, 60vw); padding-inline: 9px; }
 .castle-feedback { margin-block: 5px; color: #862c29; font-size: 15px; }
 .castle-form .legend-start:disabled { opacity: 0.58; cursor: default; }

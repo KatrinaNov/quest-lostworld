@@ -271,8 +271,8 @@ export class RealtimeRoom extends Emitter<RoomEvents> implements RoomSession {
     return this.castleStarting;
   }
 
-  castleAnswer(seal: number, answer: string) {
-    return this.castleQuest?.answer(seal, answer) ?? Promise.resolve('loading' as const);
+  castleAnswer(seal: number, answer?: string) {
+    return this.castleQuest?.answer(seal, answer) ?? Promise.resolve({ result: 'loading' as const });
   }
 
   /**

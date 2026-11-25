@@ -19,7 +19,7 @@ import {
 } from '../game/quest/jungleQuestTypes';
 import { initialTempleQuestState, type TempleQuestState } from '../game/quest/templeQuestTypes';
 import { initialMazePlayerState, initialMazeQuestState, MAZE_GLYPHS, MAZE_PHRASE, mazeAssemblyReady, type MazeQuestState } from '../game/quest/mazeQuestTypes';
-import { ALL_CASTLE_SEALS, initialCastleQuestState, isCastleSealOpen, type CastleAnswerResult } from '../game/quest/castleQuestTypes';
+import { ALL_CASTLE_SEALS, CASTLE_MEMORY_LENGTHS, CASTLE_MIRROR_LEASE_MS, CASTLE_MIRROR_SEAL, initialCastleQuestState, isCastleSealOpen, type CastleAnswer, type CastleMemoryRound, type CastleQuestState } from '../game/quest/castleQuestTypes';
 
 /**
  * ТОЛЬКО ДЛЯ РАЗРАБОТКИ (npm run dev, адрес ?demo=1): локальная «комната» без Supabase
@@ -38,6 +38,8 @@ export class DemoRoom extends Emitter<RoomEvents> implements RoomSession {
   private templeState: TempleQuestState = initialTempleQuestState();
   private mazeState: MazeQuestState = initialMazeQuestState();
   private castleState = initialCastleQuestState();
+  private castleMemory: CastleMemoryRound | null = null;
+  private mirrorAlignedSince = 0;
 
   constructor(name: string, preview: DevPreviewOptions | null = null) {
     super();
@@ -103,7 +105,7 @@ export class DemoRoom extends Emitter<RoomEvents> implements RoomSession {
   }
 
   getPlayers(): Player[] {
-    return [...this.players];
+    return this.castleState.mirrorTeam.length ? [this.self] : [...this.players];
   }
 
   getStatus(): ConnectionStatus {
@@ -257,7 +259,7 @@ export class DemoRoom extends Emitter<RoomEvents> implements RoomSession {
 
   async mazeSubmitCode(code: string) {
     if (!this.mazeState.players[this.self.id]?.solved) return 'ignored' as const;
-    if (code.trim() !== '0427') return 'wrong' as const;
+    if (code.trim().toUpperCase() !== 'МЕЧ') return 'wrong' as const;
     this.updateMaze({ completed: true });
     return 'completed' as const;
   }
@@ -269,15 +271,64 @@ export class DemoRoom extends Emitter<RoomEvents> implements RoomSession {
 
   getCastleQuestState() { return this.castleState; }
   isCastleQuestReady() { return true; }
-  async castleStart(): Promise<void> { this.emit('castleState', this.castleState); }
-  async castleAnswer(seal: number, answer: string): Promise<CastleAnswerResult> {
-    if (isCastleSealOpen(this.castleState, seal)) return 'already_open';
-    const expected = ['STONE,WATER,LEAF,FIRE', '6', '1,4,1', 'КРЫЛО'][seal];
-    if (answer.trim().toUpperCase() !== expected) return 'wrong';
-    const openedMask = this.castleState.openedMask | (1 << seal);
-    this.castleState = { openedMask, revision: this.castleState.revision + 1 };
+  async castleStart(): Promise<void> {
+    if (!this.castleState.mirrorTeam.length) {
+      this.castleState = { ...this.castleState, mirrorTeam: [this.self.id] };
+      this.emit('players', this.getPlayers());
+    }
     this.emit('castleState', this.castleState);
-    return openedMask === ALL_CASTLE_SEALS ? 'completed' : 'opened';
+  }
+  async castleAnswer(seal: number, answer?: string): Promise<CastleAnswer> {
+    if (isCastleSealOpen(this.castleState, seal)) return { result: 'already_open' };
+    const normalized = answer?.trim().toUpperCase();
+    if (seal === CASTLE_MIRROR_SEAL) {
+      const result = this.holdCastleMirror(normalized);
+      if (result) return result;
+    } else if (seal === 2) {
+      const memory = this.castleMemory ?? this.makeCastleMemory(0);
+      const currentStage = normalized?.startsWith(`${memory.stage}:`) ?? false;
+      const correct = currentStage && normalized === `${memory.stage}:${memory.pattern}`;
+      if (!correct) return { result: 'memory', memory: { ...memory, retry: currentStage } };
+      if (memory.stage < CASTLE_MEMORY_LENGTHS.length - 1) {
+        return { result: 'memory', memory: this.makeCastleMemory(memory.stage + 1) };
+      }
+    } else {
+      const expected = ['CREEPER,BOW,TORCH,AXE,PICKAXE,SWORD,POTION', '108'][seal];
+      if (!expected || normalized !== expected) return { result: 'wrong' };
+    }
+    const openedMask = this.castleState.openedMask | (1 << seal);
+    this.updateCastle({ openedMask, ...(seal === CASTLE_MIRROR_SEAL ? { mirrorHolds: {} } : {}) });
+    return { result: openedMask === ALL_CASTLE_SEALS ? 'completed' : 'opened' };
+  }
+
+  private holdCastleMirror(answer?: string): CastleAnswer | undefined {
+    if (answer === 'RELEASE') {
+      this.mirrorAlignedSince = 0;
+      this.updateCastle({ mirrorHolds: {} });
+      return { result: 'synced' };
+    }
+    if (!answer || !/^[0-7]$/.test(answer)) return { result: 'wrong' };
+    const step = Number(answer);
+    const now = Date.now();
+    const previous = this.castleState.mirrorHolds[this.self.id];
+    if (step !== 0) this.mirrorAlignedSince = 0;
+    else if (previous?.step !== 0 || previous.expiresAt <= now) this.mirrorAlignedSince = now;
+    if (step === 0 && now - this.mirrorAlignedSince >= 650) return;
+    this.updateCastle({ mirrorHolds: { [this.self.id]: { step, expiresAt: now + CASTLE_MIRROR_LEASE_MS } } });
+    return { result: 'synced' };
+  }
+
+  private updateCastle(changes: Partial<CastleQuestState>): void {
+    this.castleState = { ...this.castleState, ...changes, revision: this.castleState.revision + 1 };
+    this.emit('castleState', this.castleState);
+  }
+
+  private makeCastleMemory(stage: number): CastleMemoryRound {
+    const pool = [...'123456789'];
+    const pattern = Array.from({ length: CASTLE_MEMORY_LENGTHS[stage] }, () =>
+      pool.splice(Math.floor(Math.random() * pool.length), 1)[0]).join('');
+    this.castleMemory = { stage, pattern, retry: false };
+    return this.castleMemory;
   }
 
   sendPosition(x: number, y: number): void {
